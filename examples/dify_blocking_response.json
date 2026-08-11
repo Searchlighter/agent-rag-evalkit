@@ -1,0 +1,22 @@
+{
+  "message_id": "synthetic-message-id",
+  "conversation_id": "synthetic-conversation-id",
+  "answer": "Synthetic policy answer.",
+  "metadata": {
+    "usage": {
+      "prompt_tokens": 12,
+      "completion_tokens": 8,
+      "total_tokens": 20
+    },
+    "retriever_resources": [
+      {
+        "dataset_id": "synthetic-dataset",
+        "document_id": "policy-document",
+        "segment_id": "chunk-001",
+        "document_name": "Synthetic Policy",
+        "score": 0.91,
+        "content": "Synthetic evidence content."
+      }
+    ]
+  }
+}

@@ -1,0 +1,60 @@
+name: Feature request
+description: Propose a scoped and testable EvalKit improvement
+title: "[Feature]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the evaluation or diagnostic problem before proposing an implementation.
+        Do not include confidential business data.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Capability area
+      options:
+        - Evaluation metrics
+        - Dataset and data quality
+        - Trace and observability
+        - Badcase and regression
+        - Adapter integration
+        - MCP-style tools
+        - API and deployment
+        - Developer experience
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and user impact
+      description: What cannot be done today, and who is affected?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed capability
+      description: Include an example input/output or API shape when possible.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility, security, and data considerations
+      description: Note schema, Adapter, migration, secret, or privacy impact.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I searched existing issues and kept all examples synthetic or public.
+          required: true

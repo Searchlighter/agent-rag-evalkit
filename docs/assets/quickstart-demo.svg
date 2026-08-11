@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="540" viewBox="0 0 1200 540" role="img" aria-labelledby="title desc">
+  <title id="title">AgentRAG EvalKit Quickstart</title>
+  <desc id="desc">A terminal-style illustration of running the local deterministic evaluation demo.</desc>
+  <rect width="1200" height="540" rx="20" fill="#0d1117"/>
+  <rect width="1200" height="58" rx="20" fill="#161b22"/>
+  <rect y="38" width="1200" height="20" fill="#161b22"/>
+  <circle cx="32" cy="29" r="8" fill="#ff5f56"/>
+  <circle cx="58" cy="29" r="8" fill="#ffbd2e"/>
+  <circle cx="84" cy="29" r="8" fill="#27c93f"/>
+  <text x="600" y="35" text-anchor="middle" fill="#8b949e" font-family="Segoe UI, sans-serif" font-size="16">AgentRAG EvalKit · deterministic local demo</text>
+  <g font-family="Consolas, monospace" font-size="21">
+    <text x="32" y="105" fill="#7ee787">$ python main.py</text>
+    <text x="32" y="153" fill="#c9d1d9">dataset</text><text x="190" y="153" fill="#79c0ff">enterprise-knowledge-demo</text>
+    <text x="32" y="195" fill="#c9d1d9">run_status</text><text x="190" y="195" fill="#7ee787">succeeded</text>
+    <text x="32" y="237" fill="#c9d1d9">case_count</text><text x="190" y="237" fill="#d2a8ff">2</text>
+    <text x="32" y="279" fill="#c9d1d9">metrics</text><text x="190" y="279" fill="#ffa657">Recall@5 · MRR · Citation Coverage</text>
+    <text x="32" y="339" fill="#7ee787">$ python -m unittest discover -s tests -v</text>
+    <text x="32" y="387" fill="#c9d1d9">P2 Trace / Badcase / Regression</text><text x="770" y="387" fill="#7ee787">OK</text>
+    <text x="32" y="429" fill="#c9d1d9">P3 MCP / Dify / RAGFlow adapters</text><text x="770" y="429" fill="#7ee787">OK</text>
+    <text x="32" y="489" fill="#8b949e">No API key · No database · Synthetic data only</text>
+  </g>
+</svg>

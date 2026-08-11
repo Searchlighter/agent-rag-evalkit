@@ -1,0 +1,37 @@
+{
+  "id": "synthetic-chat-completion",
+  "model": "model",
+  "object": "chat.completion",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Synthetic RAGFlow answer.",
+        "reference": {
+          "chunks": {
+            "0": {
+              "id": "chunk-001",
+              "document_id": "ragflow-document",
+              "document_name": "Synthetic Manual",
+              "dataset_id": "synthetic-dataset",
+              "content": "Synthetic evidence.",
+              "similarity": 0.88,
+              "vector_similarity": 0.91,
+              "term_similarity": 0.67,
+              "document_metadata": {
+                "source": "synthetic"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 11,
+    "completion_tokens": 7,
+    "total_tokens": 18
+  }
+}

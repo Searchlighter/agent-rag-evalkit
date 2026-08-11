@@ -1,0 +1,70 @@
+name: Bug report
+description: Report a reproducible AgentRAG EvalKit defect
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a defect. Use synthetic data and remove API keys,
+        customer documents, personal information, and production traces.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      options:
+        - Dataset and ingestion
+        - Evaluation and metrics
+        - Trace and diagnosis
+        - Badcase and regression
+        - MCP-style tools
+        - Dify/RAGFlow/HTTP Adapter
+        - FastAPI
+        - Docker or CI
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: EvalKit version or commit
+      placeholder: "0.5.0 or commit SHA"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include commands and a minimal synthetic payload.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and error output
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python, installation method, Adapter, and Docker version when relevant.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Data safety confirmation
+      options:
+        - label: I removed secrets, personal data, customer documents, and production traces.
+          required: true
+        - label: I searched existing issues and can reproduce this on the latest available version.
+          required: true

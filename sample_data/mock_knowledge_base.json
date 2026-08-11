@@ -1,0 +1,30 @@
+[
+  {
+    "document_id": "expense-policy",
+    "chunk_id": "travel",
+    "title": "差旅费用管理办法（合成示例）",
+    "content": "员工应在出差结束后 10 个工作日内提交报销单，并附发票、行程单和其他有效凭证。",
+    "keywords": ["差旅", "出差", "报销", "发票", "行程", "凭证"]
+  },
+  {
+    "document_id": "procurement-policy",
+    "chunk_id": "contract",
+    "title": "采购合同审批规范（合成示例）",
+    "content": "采购合同先由部门负责人确认业务内容，再依次提交法务合规审查和财务预算审批。",
+    "keywords": ["采购", "合同", "审批", "部门负责人", "法务", "财务"]
+  },
+  {
+    "document_id": "it-handbook",
+    "chunk_id": "password",
+    "title": "账号与密码手册（合成示例）",
+    "content": "忘记密码时，员工可通过统一身份平台完成自助重置；无法验证身份时联系 IT 服务台。",
+    "keywords": ["账号", "密码", "忘记", "重置", "身份平台", "IT"]
+  },
+  {
+    "document_id": "hr-handbook",
+    "chunk_id": "annual-leave",
+    "title": "员工休假手册（合成示例）",
+    "content": "正式员工基础年假为每年 5 个工作日，具体天数根据司龄和当地法规进行调整。",
+    "keywords": ["员工", "年假", "休假", "5 个工作日", "司龄"]
+  }
+]

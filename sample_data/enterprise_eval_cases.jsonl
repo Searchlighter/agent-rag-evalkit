@@ -1,0 +1,4 @@
+{"id":"case_001","question":"员工出差结束后如何申请差旅报销？","expected_answers":["提交报销单并附发票和行程凭证"],"expected_evidence":["expense-policy#travel"],"tags":["expense","policy"],"metadata":{"require_citations":true,"required_keywords":["发票","凭证"]}}
+{"id":"case_002","question":"采购合同需要经过哪些审批步骤？","expected_answers":["部门负责人、法务和财务依次审批"],"expected_evidence":["procurement-policy#contract"],"tags":["procurement","contract"],"metadata":{"require_citations":true,"required_keywords":["法务","财务"]}}
+{"id":"case_003","question":"忘记公司账号密码后应该怎么处理？","expected_answers":["通过统一身份平台自助重置或联系 IT 服务台"],"expected_evidence":["it-handbook#password"],"tags":["it","account"],"metadata":{"require_citations":true,"required_keywords":["身份平台","IT"]}}
+{"id":"case_004","question":"正式员工每年有多少天年假？","expected_answers":["基础年假为 5 个工作日，具体按司龄调整"],"expected_evidence":["hr-handbook#annual-leave"],"tags":["hr","leave"],"metadata":{"require_citations":true,"required_keywords":["5 个工作日","司龄"]}}

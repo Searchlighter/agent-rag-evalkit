@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-rag-evalkit"
+version = "0.5.0"
+description = "Evaluation, Trace diagnosis, and Badcase regression Demo for RAG/Agent systems"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.11"
+keywords = ["rag", "agent", "evaluation", "langgraph", "mcp"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Testing",
+]
+dependencies = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "pydantic>=2.0"]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.5"]
+observability = ["langfuse>=3.3.1"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+exclude = ["tests*", "scripts*", "sample_data*", "examples*", "benchmarks*", "docs*"]
+namespaces = false
