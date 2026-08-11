@@ -495,7 +495,11 @@ class EvalKitServiceTests(unittest.TestCase):
 
     def test_p4_app_metadata_and_readiness(self) -> None:
         app = create_app()
-        routes = {route.path for route in app.routes}
+        routes = {
+            path
+            for route in app.routes
+            if (path := getattr(route, "path", None)) is not None
+        }
         self.assertEqual("0.5.0", app.version)
         self.assertIn("/health", routes)
         self.assertIn("/ready", routes)
