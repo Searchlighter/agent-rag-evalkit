@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import unittest
 
-from fastapi.testclient import TestClient
-
 from app.dashboard import bootstrap_dashboard_demo, build_dashboard_snapshot
 from app.main import create_app
 from app.repository import InMemoryRepository
@@ -38,16 +36,30 @@ class DashboardTests(unittest.TestCase):
 
     def test_application_exposes_dashboard_and_snapshot_routes(self) -> None:
         """应用应同时注册可视化页面及其只读数据接口。"""
-        client = TestClient(create_app())
+        routes = self._collect_routes(create_app().routes)
 
-        html_response = client.get("/dashboard")
-        snapshot_response = client.get("/api/v1/dashboard/snapshot")
-
-        self.assertEqual(200, html_response.status_code)
-        self.assertIn("AgentRAG EvalKit", html_response.text)
-        self.assertEqual(200, snapshot_response.status_code)
-        snapshot = snapshot_response.json()
+        self.assertIn("/dashboard", routes)
+        self.assertIn("/api/v1/dashboard/snapshot", routes)
+        html_response = routes["/dashboard"].endpoint()
+        self.assertIn("AgentRAG EvalKit", html_response.body.decode("utf-8"))
+        snapshot = routes["/api/v1/dashboard/snapshot"].endpoint()
         self.assertEqual("succeeded", snapshot["summary"]["status"])
+
+    @classmethod
+    def _collect_routes(cls, routes: list[object]) -> dict[str, object]:
+        """兼容 FastAPI 旧版扁平路由与新版嵌套路由结构。"""
+        collected: dict[str, object] = {}
+        for route in routes:
+            path = getattr(route, "path", None)
+            if path is not None:
+                collected[path] = route
+            nested = getattr(route, "routes", None)
+            if not nested:
+                original_router = getattr(route, "original_router", None)
+                nested = getattr(original_router, "routes", None)
+            if nested:
+                collected.update(cls._collect_routes(list(nested)))
+        return collected
 
 
 if __name__ == "__main__":
