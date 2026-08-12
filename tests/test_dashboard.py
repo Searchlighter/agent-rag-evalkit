@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import unittest
 
+from fastapi.testclient import TestClient
+
 from app.dashboard import bootstrap_dashboard_demo, build_dashboard_snapshot
 from app.main import create_app
 from app.repository import InMemoryRepository
@@ -36,18 +38,15 @@ class DashboardTests(unittest.TestCase):
 
     def test_application_exposes_dashboard_and_snapshot_routes(self) -> None:
         """应用应同时注册可视化页面及其只读数据接口。"""
-        app = create_app()
-        routes = {
-            path: route
-            for route in app.routes
-            if (path := getattr(route, "path", None)) is not None
-        }
+        client = TestClient(create_app())
 
-        self.assertIn("/dashboard", routes)
-        self.assertIn("/api/v1/dashboard/snapshot", routes)
-        html_response = routes["/dashboard"].endpoint()
-        self.assertIn("AgentRAG EvalKit", html_response.body.decode("utf-8"))
-        snapshot = routes["/api/v1/dashboard/snapshot"].endpoint()
+        html_response = client.get("/dashboard")
+        snapshot_response = client.get("/api/v1/dashboard/snapshot")
+
+        self.assertEqual(200, html_response.status_code)
+        self.assertIn("AgentRAG EvalKit", html_response.text)
+        self.assertEqual(200, snapshot_response.status_code)
+        snapshot = snapshot_response.json()
         self.assertEqual("succeeded", snapshot["summary"]["status"])
 
 
