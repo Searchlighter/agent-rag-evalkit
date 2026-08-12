@@ -11,21 +11,21 @@ class P401DocumentationTests(unittest.TestCase):
 
         self.assertIn("## Quickstart", readme)
         self.assertIn("## 能力边界", readme)
-        self.assertIn("docs/assets/quickstart-demo.svg", readme)
+        self.assertIn("docs/assets/dashboard-overview.png", readme)
         self.assertIn("docs/faq.md", readme)
         self.assertIn("```mermaid", readme)
         self.assertIn("python -m unittest discover -s tests -v", readme)
 
     def test_architecture_and_visual_asset_are_present(self) -> None:
         architecture = (ROOT / "docs" / "architecture.md").read_text(encoding="utf-8")
-        visual = ROOT / "docs" / "assets" / "quickstart-demo.svg"
+        visual = ROOT / "docs" / "assets" / "dashboard-overview.png"
 
         self.assertGreaterEqual(architecture.count("```mermaid"), 4)
         self.assertIn("InMemoryRepository", architecture)
         self.assertIn("Dify Adapter", architecture)
         self.assertIn("RAGFlow Adapter", architecture)
         self.assertTrue(visual.is_file())
-        self.assertGreater(visual.stat().st_size, 500)
+        self.assertGreater(visual.stat().st_size, 10_000)
 
     def test_faq_states_demo_limitations(self) -> None:
         faq = (ROOT / "docs" / "faq.md").read_text(encoding="utf-8")

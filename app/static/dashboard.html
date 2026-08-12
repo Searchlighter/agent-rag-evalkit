@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgentRAG EvalKit · 质量诊断台</title>
+  <style>
+    :root { --bg:#07111f; --panel:#0f1d2e; --line:#20344c; --text:#edf5ff; --muted:#91a7bf; --cyan:#4de2c5; --blue:#68a7ff; --orange:#ffb86c; --red:#ff6b7a; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--text); background:radial-gradient(circle at 80% 0,#123458 0,transparent 32%),var(--bg); font:14px/1.55 Inter,"PingFang SC","Microsoft YaHei",sans-serif; }
+    .shell { max-width:1440px; margin:auto; padding:28px; }
+    header { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-bottom:22px; }
+    .eyebrow { color:var(--cyan); text-transform:uppercase; letter-spacing:.16em; font-size:12px; font-weight:800; }
+    h1 { margin:5px 0 3px; font-size:31px; letter-spacing:-.03em; }
+    .subtitle,.notice { color:var(--muted); }
+    .status { padding:8px 13px; border:1px solid #24573f; border-radius:999px; color:#8ff0bc; background:#102b24; white-space:nowrap; }
+    .notice { padding:10px 14px; margin-bottom:18px; background:#142131; border:1px solid var(--line); border-radius:10px; }
+    .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:18px; }
+    .card,.panel { background:linear-gradient(160deg,rgba(18,35,54,.97),rgba(11,24,39,.97)); border:1px solid var(--line); border-radius:16px; box-shadow:0 18px 50px rgba(0,0,0,.18); }
+    .metric { padding:18px; position:relative; overflow:hidden; }
+    .metric:after { content:""; position:absolute; width:90px; height:90px; border-radius:50%; right:-30px; top:-42px; background:var(--accent); opacity:.12; }
+    .metric-label { color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+    .metric-value { font-size:30px; font-weight:800; margin:5px 0 3px; }
+    .metric-note { color:var(--muted); font-size:12px; }
+    .grid { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr); gap:18px; }
+    .panel { padding:19px; min-width:0; }
+    .panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+    h2 { margin:0; font-size:17px; }
+    .pill { border:1px solid var(--line); border-radius:999px; color:var(--muted); padding:4px 9px; font-size:11px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    th { text-align:left; color:var(--muted); font-size:11px; letter-spacing:.05em; padding:10px 8px; border-bottom:1px solid var(--line); }
+    td { padding:12px 8px; border-bottom:1px solid rgba(32,52,76,.65); vertical-align:top; overflow-wrap:anywhere; }
+    td:last-child { font-size:12px; }
+    tbody tr { cursor:pointer; transition:.18s ease; }
+    tbody tr:hover,tbody tr.active { background:#152943; }
+    th:first-child { width:42%; }
+    .question { font-weight:650; overflow-wrap:anywhere; }
+    .tag { display:inline-block; margin:2px 4px 0 0; padding:2px 7px; border-radius:6px; background:#182c43; color:#9cc5ed; font-size:11px; }
+    .pass { color:var(--cyan); font-weight:800; } .fail { color:var(--red); font-weight:800; }
+    .detail { min-height:220px; }
+    .empty { color:var(--muted); padding:32px 6px; text-align:center; }
+    .detail h3 { font-size:15px; margin:0 0 8px; }
+    .detail-row { margin:13px 0; }
+    .detail-label { display:block; color:var(--muted); font-size:11px; margin-bottom:3px; text-transform:uppercase; letter-spacing:.06em; }
+    .code { padding:10px; border-radius:9px; background:#081522; color:#b9cce0; overflow-wrap:anywhere; }
+    .badcases { margin-top:18px; }
+    .badcase { padding:13px; margin-top:10px; border:1px solid #4b3340; background:#261923; border-radius:11px; }
+    .badcase-top { display:flex; justify-content:space-between; gap:10px; font-weight:750; }
+    .severity { color:#ff9ba5; font-size:11px; text-transform:uppercase; }
+    .loading { min-height:420px; display:grid; place-items:center; color:var(--muted); }
+    .error { color:#ffc0c6; }
+    footer { display:flex; justify-content:space-between; gap:16px; margin-top:18px; color:var(--muted); font-size:12px; }
+    footer a { color:#87baff; }
+    @media (max-width:1100px) { .metrics{grid-template-columns:repeat(2,minmax(0,1fr))} .grid{grid-template-columns:1fr} header{align-items:flex-start;flex-direction:column} }
+    @media (max-width:560px) { .shell{padding:16px}.metrics{grid-template-columns:1fr 1fr}.metric-value{font-size:24px}.table-wrap{overflow:auto} }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div><div class="eyebrow">RAG Quality Observatory</div><h1>AgentRAG EvalKit</h1><div class="subtitle">企业知识库评测与智能体质量诊断台</div></div>
+      <div class="status" id="run-status">● 正在加载评测快照</div>
+    </header>
+    <div class="notice" id="notice">正在读取演示数据……</div>
+    <section class="metrics" id="metrics"></section>
+    <section class="grid">
+      <article class="panel">
+        <div class="panel-head"><h2>Case 评测结果</h2><span class="pill" id="case-count">0 Cases</span></div>
+        <div class="table-wrap"><table><thead><tr><th>问题 / 标签</th><th>Recall@K</th><th>MRR</th><th>引用覆盖</th><th>诊断</th></tr></thead><tbody id="results"></tbody></table></div>
+      </article>
+      <aside>
+        <article class="panel detail" id="detail"><div class="empty">点击左侧 Case 查看证据与诊断</div></article>
+        <article class="panel badcases"><div class="panel-head"><h2>Badcase 工作台</h2><span class="pill" id="badcase-count">0 Open</span></div><div id="badcases"></div></article>
+      </aside>
+    </section>
+    <footer><span>数据范围：脱敏合成数据 · 确定性 Mock Adapter</span><span><a href="/docs">OpenAPI</a> · <a href="/ready">Readiness</a></span></footer>
+  </main>
+  <script>
+    const pct = v => v == null ? 'N/A' : `${Math.round(v * 100)}%`;
+    const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+    function metric(label, value, note, color) { return `<div class="card metric" style="--accent:${color}"><div class="metric-label">${label}</div><div class="metric-value">${value}</div><div class="metric-note">${note}</div></div>`; }
+    function showDetail(item) {
+      document.querySelectorAll('tbody tr').forEach(row => row.classList.toggle('active', row.dataset.id === item.case_id));
+      document.querySelector('#detail').innerHTML = `<div class="panel-head"><h2>Case 诊断</h2><span class="pill">${esc(item.case_id)}</span></div><h3>${esc(item.question)}</h3><div class="detail-row"><span class="detail-label">模型回答</span><div class="code">${esc(item.answer)}</div></div><div class="detail-row"><span class="detail-label">召回证据</span><div class="code">${esc(item.retrieval_ids.join(', ') || '无召回')}</div></div><div class="detail-row"><span class="detail-label">诊断结论</span><strong class="${item.metrics.recall_at_k === 0 ? 'fail' : 'pass'}">${esc(item.diagnosis.suggested_category)}</strong><div class="subtitle">${esc(item.diagnosis.suggestion)}</div></div>`;
+    }
+    async function load() {
+      try {
+        const data = await fetch('/api/v1/dashboard/snapshot').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+        const s = data.summary, m = s.metrics;
+        document.querySelector('#notice').textContent = data.demo_notice;
+        document.querySelector('#run-status').textContent = `● ${s.status.toUpperCase()} · ${s.adapter_id}`;
+        document.querySelector('#metrics').innerHTML = metric('Recall@K',pct(m.recall_at_k),'期望证据召回比例','var(--cyan)') + metric('MRR',pct(m.mrr),'首个相关结果排名质量','var(--blue)') + metric('Citation Coverage',pct(m.citation_coverage),'回答引用覆盖比例','var(--orange)') + metric('Badcases',s.badcase_count,`${s.completed_case_count} 条 Case 已完成`,'var(--red)');
+        document.querySelector('#case-count').textContent = `${data.results.length} Cases`;
+        const tbody = document.querySelector('#results');
+        tbody.innerHTML = data.results.map(item => `<tr data-id="${esc(item.case_id)}"><td><div class="question">${esc(item.question)}</div>${item.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</td><td class="${item.metrics.recall_at_k === 0 ? 'fail':'pass'}">${pct(item.metrics.recall_at_k)}</td><td>${pct(item.metrics.mrr)}</td><td>${pct(item.metrics.citation_coverage)}</td><td class="${item.diagnosis.suggested_category === 'needs_manual_review' ? 'pass':'fail'}">${esc(item.diagnosis.suggested_category)}</td></tr>`).join('');
+        tbody.querySelectorAll('tr').forEach((row,index) => row.addEventListener('click',()=>showDetail(data.results[index])));
+        document.querySelector('#badcase-count').textContent = `${data.badcases.length} Open`;
+        document.querySelector('#badcases').innerHTML = data.badcases.length ? data.badcases.map(item=>`<div class="badcase"><div class="badcase-top"><span>${esc(item.category)}</span><span class="severity">${esc(item.severity)}</span></div><div class="subtitle">${esc(item.case_id)} · ${esc(item.note)}</div></div>`).join('') : '<div class="empty">当前没有 Badcase</div>';
+        if (data.results.length) showDetail(data.results.find(x=>x.metrics.recall_at_k===0) || data.results[0]);
+      } catch (error) {
+        document.querySelector('#notice').innerHTML = `<span class="error">加载失败：${esc(error.message)}</span>`;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

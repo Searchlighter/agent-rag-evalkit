@@ -4,7 +4,9 @@
 
 > 当前仓库是作品集 Demo：默认使用内存存储、Mock Adapter 和脱敏合成数据，不包含生产数据，也不宣称生产并发能力。
 
-![AgentRAG EvalKit Quickstart](docs/assets/quickstart-demo.svg)
+![AgentRAG EvalKit Dashboard](docs/assets/dashboard-overview.png)
+
+Dashboard 将评测指标、逐 Case 结果、检索证据和 Badcase 诊断集中到一个页面。启动服务后访问 <http://127.0.0.1:8000/dashboard>；页面中的数据来自实际评测服务调用，不是静态截图，当前演示数据范围会在页面顶部明确标注。
 
 ## 核心能力
 
@@ -70,6 +72,7 @@ uvicorn app.main:app --reload
 
 启动后访问：
 
+- 可视化 Dashboard：<http://127.0.0.1:8000/dashboard>
 - OpenAPI：<http://127.0.0.1:8000/docs>
 - 健康检查：<http://127.0.0.1:8000/health>
 - 就绪检查：<http://127.0.0.1:8000/ready>
@@ -122,13 +125,14 @@ python -m scripts.demo_http_eval
 - 单进程同步评测闭环和内存数据模型。
 - 确定性的检索指标、回答规则校验、失败诊断及回归比较。
 - FastAPI、MCP 风格工具接口和多种 Adapter 示例。
+- 只读可视化 Dashboard，展示合成演示运行的指标、Case 结果和 Badcase 诊断。
 - Trace 脱敏、基础鉴权、超时重试和服务审计。
 
 ### 当前未实现
 
 - PostgreSQL 等持久化存储、租户隔离和完整 RBAC。
 - 异步任务队列、分布式 Worker、断点恢复及大规模并发调度。
-- Web 管理后台、实时评测进度页面和人工标注界面。
+- 可写 Web 管理后台、实时评测进度页面和人工标注界面。
 - 基于语义模型的裁判指标、统计显著性分析和生产告警。
 - 官方 MCP SDK 的完整协议生命周期，以及真实 Dify/RAGFlow 环境联调证明。
 
@@ -139,6 +143,8 @@ python -m scripts.demo_http_eval
 ```text
 app/
   api.py                 FastAPI 路由
+  dashboard.py           Dashboard 演示数据与只读快照接口
+  static/dashboard.html  无构建步骤的可视化页面
   service.py             评测、诊断、Badcase 与回归业务逻辑
   domain.py              核心领域模型
   repository.py          内存存储实现
