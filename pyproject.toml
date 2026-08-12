@@ -36,3 +36,6 @@ where = ["."]
 include = ["app*"]
 exclude = ["tests*", "scripts*", "sample_data*", "examples*", "benchmarks*", "docs*"]
 namespaces = false
+
+[tool.setuptools.package-data]
+app = ["static/*.html"]

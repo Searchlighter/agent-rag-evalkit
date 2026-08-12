@@ -1,5 +1,18 @@
 # 示例数据与 HTTP 演示
 
+## 可视化 Dashboard
+
+安装项目并启动 FastAPI：
+
+```bash
+pip install -e .
+uvicorn app.main:app --reload
+```
+
+浏览器访问 <http://127.0.0.1:8000/dashboard>。应用启动时会执行一组包含 6 条脱敏合成 Case 的确定性评测，其中 4 条命中期望证据，2 条形成 `wrong_retrieval` Badcase。Dashboard 展示的 Recall@K、MRR、引用覆盖率、Case 结果和诊断信息均来自 `/api/v1/dashboard/snapshot`，不是写死在页面中的指标。
+
+该演示用于展示操作和数据流，不代表真实业务准确率。真实系统验证需要通过 HTTP、Dify 或 RAGFlow Adapter 接入独立目标系统。
+
 该演示使用 4 条人工合成企业制度和 4 条配套问题，证明 EvalKit 可以通过正式 HTTP Adapter 评测一个独立 RAG 服务。它不调用大模型，也不需要 API Key。
 
 ## 数据文件
