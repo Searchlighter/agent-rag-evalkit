@@ -1,0 +1,24 @@
+{"id":"ref_001","question":"出差结束后报销需要提交什么？","expected_answers":["提交费用报销单并附发票和行程单"],"expected_evidence":["expense-policy#travel"],"tags":["finance","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_002","question":"个人垫付的差旅费怎样走流程？","expected_answers":["提交费用报销单并附有效凭证"],"expected_evidence":["expense-policy#travel"],"tags":["finance","synonym"],"metadata":{"require_citations":true}}
+{"id":"ref_003","question":"采购合同要经过哪些部门审批？","expected_answers":["部门负责人、法务和财务审批"],"expected_evidence":["procurement-policy#contract"],"tags":["procurement","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_004","question":"协议会签涉及哪些角色？","expected_answers":["业务负责人、法务和财务"],"expected_evidence":["procurement-policy#contract"],"tags":["procurement","synonym"],"metadata":{"require_citations":true}}
+{"id":"ref_005","question":"忘记账号密码如何重置？","expected_answers":["通过统一身份平台重置"],"expected_evidence":["it-handbook#password"],"tags":["it","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_006","question":"登录凭证失效了找谁处理？","expected_answers":["自助重置或联系 IT 服务台"],"expected_evidence":["it-handbook#password"],"tags":["it","synonym"],"metadata":{"require_citations":true}}
+{"id":"ref_007","question":"正式员工基础年假是多少天？","expected_answers":["五个工作日"],"expected_evidence":["hr-handbook#annual-leave"],"tags":["hr","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_008","question":"员工每年有几天带薪休息？","expected_answers":["基础年假五个工作日"],"expected_evidence":["hr-handbook#annual-leave"],"tags":["hr","synonym"],"metadata":{"require_citations":true}}
+{"id":"ref_009","question":"收到钓鱼邮件应该怎么上报？","expected_answers":["保留邮件并上报安全团队"],"expected_evidence":["security-handbook#phishing"],"tags":["security","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_010","question":"发现可疑邮件或诈骗信该怎么办？","expected_answers":["不要点击并上报安全团队"],"expected_evidence":["security-handbook#phishing"],"tags":["security","synonym"],"metadata":{"require_citations":true}}
+{"id":"ref_011","question":"公司设备损坏如何申请维修？","expected_answers":["在资产服务台提交维修申请"],"expected_evidence":["it-handbook#remote-device"],"tags":["it","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_012","question":"在家办公时笔记本坏了怎么办？","expected_answers":["在资产服务台提交维修申请"],"expected_evidence":["it-handbook#remote-device"],"tags":["it","synonym"],"metadata":{"require_citations":true}}
+{"id":"ref_013","question":"新员工入职需要准备哪些材料？","expected_answers":["身份证明、银行卡和紧急联系人资料"],"expected_evidence":["hr-handbook#onboarding"],"tags":["hr","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_014","question":"新同事报到前要带什么资料？","expected_answers":["身份证明和银行卡等资料"],"expected_evidence":["hr-handbook#onboarding"],"tags":["hr","synonym"],"metadata":{"require_citations":true}}
+{"id":"ref_015","question":"申请企业发票要提供什么？","expected_answers":["订单号、公司抬头和税号"],"expected_evidence":["finance-policy#invoice"],"tags":["finance","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_016","question":"订单完成后怎样开票？","expected_answers":["提交订单号、抬头和税号"],"expected_evidence":["finance-policy#invoice"],"tags":["finance","synonym"],"metadata":{"require_citations":true}}
+{"id":"ref_017","question":"远程办公怎么使用 VPN 访问内网？","expected_answers":["安装 VPN 并使用多因素认证"],"expected_evidence":["it-handbook#vpn"],"tags":["it","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_018","question":"在家访问内网需要做什么？","expected_answers":["使用 VPN 和多因素认证"],"expected_evidence":["it-handbook#vpn"],"tags":["it","synonym"],"metadata":{"require_citations":true}}
+{"id":"ref_019","question":"员工离职需要交接哪些内容？","expected_answers":["工作文档、客户事项和公司资产"],"expected_evidence":["hr-handbook#offboarding"],"tags":["hr","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_020","question":"准备离开公司前要完成什么？","expected_answers":["完成工作和资产交接"],"expected_evidence":["hr-handbook#offboarding"],"tags":["hr","synonym"],"metadata":{"require_citations":true}}
+{"id":"ref_021","question":"加班后如何申请调休？","expected_answers":["经审批和考勤确认后申请调休"],"expected_evidence":["hr-handbook#overtime"],"tags":["hr","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_022","question":"新增供应商需要提交哪些资料？","expected_answers":["营业执照、收款账户和合规声明"],"expected_evidence":["procurement-policy#vendor"],"tags":["procurement","lexical"],"metadata":{"require_citations":true}}
+{"id":"ref_023","question":"供货商进入资源池前需要什么审核？","expected_answers":["采购及法务审核"],"expected_evidence":["procurement-policy#vendor"],"tags":["procurement","synonym"],"metadata":{"require_citations":true}}
+{"id":"ref_024","question":"设备维修申请要填写哪些信息？","expected_answers":["设备编号和故障现象"],"expected_evidence":["it-handbook#remote-device"],"tags":["it","lexical"],"metadata":{"require_citations":true}}

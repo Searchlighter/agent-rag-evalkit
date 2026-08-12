@@ -12,16 +12,17 @@ class P403DockerTests(unittest.TestCase):
         self.assertIn("FROM python:3.11-slim", dockerfile)
         self.assertIn("USER evalkit", dockerfile)
         self.assertIn("APP_UID=10001", dockerfile)
-        self.assertIn("EXPOSE 8000 8001", dockerfile)
+        self.assertIn("EXPOSE 8000 8001 8002", dockerfile)
         self.assertNotIn("COPY . .", dockerfile)
 
-    def test_compose_defines_two_hardened_healthy_services(self) -> None:
+    def test_compose_defines_three_hardened_healthy_services(self) -> None:
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
         self.assertIn("evalkit-api:", compose)
         self.assertIn("mock-rag:", compose)
+        self.assertIn("reference-rag:", compose)
         self.assertIn("condition: service_healthy", compose)
-        self.assertEqual(2, compose.count("healthcheck:"))
+        self.assertEqual(3, compose.count("healthcheck:"))
         self.assertIn("read_only: true", compose)
         self.assertIn("no-new-privileges:true", compose)
         self.assertIn("mem_limit: 256m", compose)
@@ -31,7 +32,7 @@ class P403DockerTests(unittest.TestCase):
         deployment = (ROOT / "docs" / "deployment.md").read_text(encoding="utf-8")
         dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
 
-        self.assertIn("1 CPU / 512 MB", deployment)
+        self.assertIn("1.5 CPU / 768 MB", deployment)
         self.assertIn("docker compose up --build -d", deployment)
         self.assertIn("InMemoryRepository", deployment)
         self.assertIn("Docker daemon 未启动", deployment)

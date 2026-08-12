@@ -1,0 +1,14 @@
+[
+  {"document_id":"expense-policy","chunk_id":"travel","title":"差旅费用管理办法","content":"员工出差结束后，应在十个工作日内提交费用报销单，并附发票、行程单和其他有效凭证。","source":"synthetic/finance-policy.md"},
+  {"document_id":"procurement-policy","chunk_id":"contract","title":"采购合同审批规范","content":"采购合同先由部门负责人确认业务内容，再依次提交法务合规审查和财务预算审批。","source":"synthetic/procurement-policy.md"},
+  {"document_id":"it-handbook","chunk_id":"password","title":"账号与密码手册","content":"忘记密码时，员工可通过统一身份平台完成自助重置；无法验证身份时联系 IT 服务台。","source":"synthetic/it-handbook.md"},
+  {"document_id":"hr-handbook","chunk_id":"annual-leave","title":"员工休假手册","content":"正式员工基础年假为每年五个工作日，具体天数根据司龄和当地法规调整。","source":"synthetic/hr-handbook.md"},
+  {"document_id":"security-handbook","chunk_id":"phishing","title":"钓鱼邮件处置指引","content":"收到可疑邮件时不要点击链接或下载附件，应保留原始邮件并通过安全事件入口上报安全团队。","source":"synthetic/security-handbook.md"},
+  {"document_id":"it-handbook","chunk_id":"remote-device","title":"远程办公设备维修","content":"公司配发设备损坏后，应在资产服务台提交维修申请，并填写设备编号和故障现象。","source":"synthetic/it-handbook.md"},
+  {"document_id":"hr-handbook","chunk_id":"onboarding","title":"新员工入职清单","content":"新员工入职前需准备身份证明、银行卡信息和紧急联系人资料，并完成劳动合同签署。","source":"synthetic/hr-handbook.md"},
+  {"document_id":"finance-policy","chunk_id":"invoice","title":"企业发票申请规范","content":"开具企业发票时需提交订单号、公司抬头和税号，财务审核后发送电子发票。","source":"synthetic/finance-policy.md"},
+  {"document_id":"it-handbook","chunk_id":"vpn","title":"远程访问与 VPN 指南","content":"远程办公访问公司内网时，需要安装 VPN 客户端并使用多因素认证完成登录。","source":"synthetic/it-handbook.md"},
+  {"document_id":"hr-handbook","chunk_id":"offboarding","title":"员工离职交接流程","content":"离职员工应完成工作文档、客户事项和公司资产交接，经负责人确认后办理账号停用。","source":"synthetic/hr-handbook.md"},
+  {"document_id":"hr-handbook","chunk_id":"overtime","title":"加班与调休管理","content":"加班需要提前获得负责人审批，经考勤确认后可以申请调休或按制度结算加班费。","source":"synthetic/hr-handbook.md"},
+  {"document_id":"procurement-policy","chunk_id":"vendor","title":"供应商准入要求","content":"新增供应商需提交营业执照、收款账户和合规声明，通过采购及法务审核后进入资源池。","source":"synthetic/procurement-policy.md"}
+]

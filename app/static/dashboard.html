@@ -23,6 +23,12 @@
     .metric-value { font-size:30px; font-weight:800; margin:5px 0 3px; }
     .metric-note { color:var(--muted); font-size:12px; }
     .grid { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr); gap:18px; }
+    .comparison { display:none; grid-template-columns:1.2fr repeat(3,1fr); gap:14px; margin-bottom:18px; padding:18px; align-items:center; }
+    .comparison.show { display:grid; }
+    .compare-title strong { display:block; font-size:17px; margin-bottom:4px; }
+    .compare-metric { padding-left:16px; border-left:1px solid var(--line); }
+    .compare-metric strong { display:block; margin-top:3px; font-size:20px; }
+    .delta { color:var(--cyan); font-size:12px; }
     .panel { padding:19px; min-width:0; }
     .panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
     h2 { margin:0; font-size:17px; }
@@ -51,7 +57,7 @@
     .error { color:#ffc0c6; }
     footer { display:flex; justify-content:space-between; gap:16px; margin-top:18px; color:var(--muted); font-size:12px; }
     footer a { color:#87baff; }
-    @media (max-width:1100px) { .metrics{grid-template-columns:repeat(2,minmax(0,1fr))} .grid{grid-template-columns:1fr} header{align-items:flex-start;flex-direction:column} }
+    @media (max-width:1100px) { .metrics{grid-template-columns:repeat(2,minmax(0,1fr))} .comparison{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr} header{align-items:flex-start;flex-direction:column} }
     @media (max-width:560px) { .shell{padding:16px}.metrics{grid-template-columns:1fr 1fr}.metric-value{font-size:24px}.table-wrap{overflow:auto} }
   </style>
 </head>
@@ -63,6 +69,7 @@
     </header>
     <div class="notice" id="notice">正在读取演示数据……</div>
     <section class="metrics" id="metrics"></section>
+    <section class="panel comparison" id="comparison"></section>
     <section class="grid">
       <article class="panel">
         <div class="panel-head"><h2>Case 评测结果</h2><span class="pill" id="case-count">0 Cases</span></div>
@@ -90,6 +97,12 @@
         document.querySelector('#notice').textContent = data.demo_notice;
         document.querySelector('#run-status').textContent = `● ${s.status.toUpperCase()} · ${s.adapter_id}`;
         document.querySelector('#metrics').innerHTML = metric('Recall@K',pct(m.recall_at_k),'期望证据召回比例','var(--cyan)') + metric('MRR',pct(m.mrr),'首个相关结果排名质量','var(--blue)') + metric('Citation Coverage',pct(m.citation_coverage),'回答引用覆盖比例','var(--orange)') + metric('Badcases',s.badcase_count,`${s.completed_case_count} 条 Case 已完成`,'var(--red)');
+        if (data.reference_comparison) {
+          const c=data.reference_comparison, b=c.baseline.summary.metrics, n=c.candidate.summary.metrics, d=c.delta;
+          const comparison=document.querySelector('#comparison');
+          comparison.classList.add('show');
+          comparison.innerHTML=`<div class="compare-title"><span class="eyebrow">Reference RAG · HTTP E2E</span><strong>BM25 → 混合检索</strong><span class="subtitle">${c.dataset.case_count} Cases · ${c.corpus.chunk_count} Chunks · Top-${c.configuration.top_k}</span></div><div class="compare-metric"><span class="metric-label">Recall@K</span><strong>${pct(b.recall_at_k)} → ${pct(n.recall_at_k)}</strong><span class="delta">+${pct(d.recall_at_k)}</span></div><div class="compare-metric"><span class="metric-label">MRR</span><strong>${pct(b.mrr)} → ${pct(n.mrr)}</strong><span class="delta">+${pct(d.mrr)}</span></div><div class="compare-metric"><span class="metric-label">Citation Coverage</span><strong>${pct(b.citation_coverage)} → ${pct(n.citation_coverage)}</strong><span class="delta">+${pct(d.citation_coverage)}</span></div>`;
+        }
         document.querySelector('#case-count').textContent = `${data.results.length} Cases`;
         const tbody = document.querySelector('#results');
         tbody.innerHTML = data.results.map(item => `<tr data-id="${esc(item.case_id)}"><td><div class="question">${esc(item.question)}</div>${item.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</td><td class="${item.metrics.recall_at_k === 0 ? 'fail':'pass'}">${pct(item.metrics.recall_at_k)}</td><td>${pct(item.metrics.mrr)}</td><td>${pct(item.metrics.citation_coverage)}</td><td class="${item.diagnosis.suggested_category === 'needs_manual_review' ? 'pass':'fail'}">${esc(item.diagnosis.suggested_category)}</td></tr>`).join('');

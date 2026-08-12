@@ -18,6 +18,28 @@ x-service-defaults: &service-defaults
   mem_limit: 256m
 
 services:
+  reference-rag:
+    <<: *service-defaults
+    command:
+      - uvicorn
+      - app.reference_rag:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8002"
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
   mock-rag:
     <<: *service-defaults
     command:
@@ -51,6 +73,8 @@ services:
       - "8000"
     depends_on:
       mock-rag:
+        condition: service_healthy
+      reference-rag:
         condition: service_healthy
     ports:
       - "8000:8000"

@@ -38,4 +38,4 @@ exclude = ["tests*", "scripts*", "sample_data*", "examples*", "benchmarks*", "do
 namespaces = false
 
 [tool.setuptools.package-data]
-app = ["static/*.html"]
+app = ["static/*.html", "data/*.json"]

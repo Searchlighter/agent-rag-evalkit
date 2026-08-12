@@ -1,0 +1,122 @@
+{
+  "schema": "agent_rag_evalkit/reference_comparison/v1",
+  "dataset": {
+    "path": "sample_data/reference_eval_cases.jsonl",
+    "case_count": 24,
+    "data_classification": "synthetic-public"
+  },
+  "corpus": {
+    "path": "app/data/reference_corpus.json",
+    "chunk_count": 12,
+    "data_classification": "synthetic-public"
+  },
+  "configuration": {
+    "top_k": 3,
+    "baseline": "BM25",
+    "candidate": "BM25 + query expansion + hashed n-gram vector"
+  },
+  "baseline": {
+    "summary": {
+      "status": "succeeded",
+      "dataset_case_count": 24,
+      "adapter_id": "reference-bm25",
+      "badcase_count": 0,
+      "completed_case_count": 24,
+      "metrics": {
+        "recall_at_k": 0.9167,
+        "mrr": 0.8958,
+        "citation_coverage": 0.875,
+        "empty_retrieval_rate": 0.0
+      },
+      "note": "指标与规则校验均为确定性计算；语义正确性可通过人工评分补充。"
+    },
+    "failures": [
+      {
+        "case_id": "ref_004",
+        "question": "协议会签涉及哪些角色？",
+        "expected_evidence": [
+          "procurement-policy#contract"
+        ],
+        "retrieval_ids": [
+          "hr-handbook#onboarding",
+          "procurement-policy#vendor"
+        ],
+        "diagnosis": {
+          "case_id": "ref_004",
+          "suggested_category": "wrong_retrieval",
+          "suggestion": "检查 Embedding、关键词召回、元数据过滤和重排。",
+          "trace_event_count": 2,
+          "quality_checks": {
+            "keyword_pass": true,
+            "regex_pass": true,
+            "json_schema_pass": true,
+            "citation_presence_pass": true,
+            "citation_validity_pass": true,
+            "missing_keywords": [],
+            "missing_patterns": [],
+            "invalid_patterns": [],
+            "invalid_citations": [],
+            "schema_errors": []
+          }
+        }
+      },
+      {
+        "case_id": "ref_006",
+        "question": "登录凭证失效了找谁处理？",
+        "expected_evidence": [
+          "it-handbook#password"
+        ],
+        "retrieval_ids": [
+          "expense-policy#travel",
+          "it-handbook#vpn",
+          "security-handbook#phishing"
+        ],
+        "diagnosis": {
+          "case_id": "ref_006",
+          "suggested_category": "wrong_retrieval",
+          "suggestion": "检查 Embedding、关键词召回、元数据过滤和重排。",
+          "trace_event_count": 2,
+          "quality_checks": {
+            "keyword_pass": true,
+            "regex_pass": true,
+            "json_schema_pass": true,
+            "citation_presence_pass": true,
+            "citation_validity_pass": true,
+            "missing_keywords": [],
+            "missing_patterns": [],
+            "invalid_patterns": [],
+            "invalid_citations": [],
+            "schema_errors": []
+          }
+        }
+      }
+    ]
+  },
+  "candidate": {
+    "summary": {
+      "status": "succeeded",
+      "dataset_case_count": 24,
+      "adapter_id": "reference-hybrid",
+      "badcase_count": 0,
+      "completed_case_count": 24,
+      "metrics": {
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "citation_coverage": 1.0,
+        "empty_retrieval_rate": 0.0
+      },
+      "note": "指标与规则校验均为确定性计算；语义正确性可通过人工评分补充。"
+    },
+    "failures": []
+  },
+  "delta": {
+    "recall_at_k": 0.0833,
+    "mrr": 0.1042,
+    "citation_coverage": 0.125
+  },
+  "limitations": [
+    "语料与问题均为公开可提交的人工合成数据，不代表生产业务分布。",
+    "哈希 n-gram 向量用于离线可复现演示，不等同于神经网络 Embedding。",
+    "回答采用首条证据抽取，不评估生成式模型的语义质量。"
+  ]
+}

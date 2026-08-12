@@ -86,7 +86,7 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Compose 会启动 EvalKit API（8000）和合成 Mock RAG（8001），两个服务均带健康检查和资源限制；不会启动 PostgreSQL、Redis、消息队列或真实模型。资源要求、安全限制和故障排查见 [Docker Compose 部署说明](docs/deployment.md)。
+Compose 会启动 EvalKit API（8000）、合成 Mock RAG（8001）和实际构建索引的 Reference RAG（8002），服务均带健康检查和资源限制；不会启动 PostgreSQL、Redis、消息队列或真实模型。资源要求、安全限制和故障排查见 [Docker Compose 部署说明](docs/deployment.md)。
 
 ### 5. 启动 MCP 风格 stdio 服务
 
@@ -108,6 +108,27 @@ python -m scripts.demo_http_eval
 
 该流程会加载 4 条合成评测样本，通过通用 HTTP Adapter 调用独立模拟服务并输出逐条结果。完整说明见 [示例数据与 HTTP 演示](docs/demo.md)。
 
+### 7. 复现 Reference RAG 对比
+
+Reference RAG 会从包内 JSON 语料实际构建 BM25 和哈希 n-gram 向量索引，不返回写死的检索结果：
+
+```bash
+# Terminal 1
+uvicorn app.reference_rag:app --host 127.0.0.1 --port 8002
+
+# Terminal 2
+python -m scripts.compare_reference_rag
+```
+
+在当前24条合成公开评测集、12个知识切片和 Top-3 配置下，实际 HTTP 端到端结果如下：
+
+| 策略 | Recall@K | MRR | Citation Coverage | 漏召回 |
+| --- | ---: | ---: | ---: | ---: |
+| BM25 Baseline | 91.67% | 89.58% | 87.50% | 2 |
+| 查询扩展 + BM25 + 哈希向量 | 100.00% | 100.00% | 100.00% | 0 |
+
+完整配置、失败样本和适用边界见 [Reference RAG 对比案例](docs/reference-rag-case-study.md)及[机器可读报告](reports/reference-rag-comparison.json)。该结果来自人工合成语料，仅证明评测和优化链路可复现，不代表生产准确率。
+
 ## 对接真实系统
 
 - 通用 HTTP 服务：实现 [HTTP Adapter 契约](docs/http-adapter-contract.md)。
@@ -126,6 +147,7 @@ python -m scripts.demo_http_eval
 - 确定性的检索指标、回答规则校验、失败诊断及回归比较。
 - FastAPI、MCP 风格工具接口和多种 Adapter 示例。
 - 只读可视化 Dashboard，展示合成演示运行的指标、Case 结果和 Badcase 诊断。
+- 从外部语料实际构建索引的本地 Reference RAG，以及 BM25/混合检索 HTTP 对比。
 - Trace 脱敏、基础鉴权、超时重试和服务审计。
 
 ### 当前未实现
@@ -149,6 +171,7 @@ app/
   domain.py              核心领域模型
   repository.py          内存存储实现
   metrics.py             检索与引用指标
+  reference_rag.py       BM25、哈希向量和混合检索 Reference RAG
   trace.py               Trace 标准化与脱敏
   quality.py             确定性回答校验
   mcp_server.py          MCP 风格工具服务
@@ -156,6 +179,7 @@ app/
 docs/                    架构、集成与功能说明
 examples/                外部系统脱敏响应样例
 sample_data/             合成评测集
+reports/                 可复现的检索策略对比结果
 scripts/                 可复现基准脚本
 tests/                   单元与端到端契约测试
 ```
@@ -164,6 +188,7 @@ tests/                   单元与端到端契约测试
 
 - [系统架构](docs/architecture.md)
 - [示例数据与 HTTP 演示](docs/demo.md)
+- [Reference RAG 对比案例](docs/reference-rag-case-study.md)
 - [Docker Compose 部署](docs/deployment.md)
 - [性能与成本基线](docs/performance-baseline.md)
 - [常见问题](docs/faq.md)

@@ -24,6 +24,12 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(0.6667, snapshot["summary"]["metrics"]["recall_at_k"])
         self.assertEqual(6, len(snapshot["results"]))
         self.assertEqual(2, len(snapshot["badcases"]))
+        self.assertEqual(
+            24, snapshot["reference_comparison"]["dataset"]["case_count"]
+        )
+        self.assertEqual(
+            0.0833, snapshot["reference_comparison"]["delta"]["recall_at_k"]
+        )
         self.assertTrue(
             all(item["category"] == "wrong_retrieval" for item in snapshot["badcases"])
         )

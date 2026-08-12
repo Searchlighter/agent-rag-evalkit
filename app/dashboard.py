@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import json
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ from .service import EvalKitService
 
 
 _DASHBOARD_HTML = Path(__file__).with_name("static") / "dashboard.html"
+_REFERENCE_REPORT = Path(__file__).resolve().parents[1] / "reports" / "reference-rag-comparison.json"
 
 _DEMO_CASES: list[dict[str, Any]] = [
     {
@@ -115,11 +117,19 @@ def build_dashboard_snapshot(service: EvalKitService, run_id: str) -> dict[str, 
             }
         )
 
+    reference_comparison = None
+    if _REFERENCE_REPORT.is_file():
+        reference_comparison = json.loads(_REFERENCE_REPORT.read_text(encoding="utf-8"))
+
     return {
-        "demo_notice": "当前页面使用脱敏合成数据与确定性 Mock Adapter，仅用于展示评测工作流。",
+        "demo_notice": (
+            "主评测明细使用脱敏合成数据与确定性 Mock Adapter；"
+            "上方对比卡来自 Reference RAG 的 HTTP 端到端评测报告。"
+        ),
         "summary": summary,
         "results": results,
         "badcases": [asdict(item) for item in service.list_badcases(eval_run_id=run_id)],
+        "reference_comparison": reference_comparison,
     }
 
 

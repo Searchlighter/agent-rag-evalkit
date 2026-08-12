@@ -13,10 +13,11 @@ RUN useradd --create-home --uid "${APP_UID}" --shell /usr/sbin/nologin evalkit
 
 COPY pyproject.toml README.md ./
 COPY app ./app
+COPY reports ./reports
 RUN pip install .
 
 USER evalkit
 
-EXPOSE 8000 8001
+EXPOSE 8000 8001 8002
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
