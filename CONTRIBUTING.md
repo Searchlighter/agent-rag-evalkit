@@ -15,7 +15,7 @@
 python -m pip install -e ".[dev]"
 python -m compileall -q app scripts tests main.py
 python -m ruff check app scripts tests main.py
-python -m unittest discover -s tests -v
+python -m unittest discover -s tests -t . -v
 python -m unittest tests.test_adapter_contracts -v
 ```
 

@@ -14,6 +14,7 @@ class P404ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("docker-build:", workflow)
         self.assertIn('python-version: ["3.11", "3.12"]', workflow)
         self.assertIn("python -m ruff check", workflow)
+        self.assertIn("python -m unittest discover -s tests -t . -v", workflow)
         self.assertIn("python -m pip wheel . --no-deps", workflow)
         self.assertIn("tests.test_adapter_contracts", workflow)
         self.assertIn("docker compose config --quiet", workflow)
@@ -36,6 +37,7 @@ class P404ContinuousIntegrationTests(unittest.TestCase):
         guide = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
 
         self.assertIn("python -m ruff check", guide)
+        self.assertIn("python -m unittest discover -s tests -t . -v", guide)
         self.assertIn("tests.test_adapter_contracts", guide)
         self.assertIn("docker compose config --quiet", guide)
 
