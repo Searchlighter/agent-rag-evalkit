@@ -18,7 +18,17 @@ The service must return JSON with this shape:
 
 The adapter uses POST, an X-Request-ID header, optional Bearer authorization,
 a configurable timeout, exponential-backoff retries, and a per-adapter circuit breaker.
-Never put a bearer token in source code; provide it at runtime.
+Never put a bearer token in source code; provide it through an environment variable:
+
+    $env:EVALKIT_HTTP_BEARER_TOKEN = "replace-me"  # PowerShell
+
+    adapter = HttpTargetAgentAdapter(
+        endpoint="https://agent.example.com/query",
+        bearer_token_env="EVALKIT_HTTP_BEARER_TOKEN",
+    )
+
+The environment variable is resolved when the adapter is created. Its value is excluded
+from the adapter representation and is never included in connection-test API responses.
 
 Configuration and response validation rules:
 
@@ -30,6 +40,7 @@ Configuration and response validation rules:
   the first successful recovery call closes the circuit and resets the failure count.
 - Transport errors are classified as timeout, network, HTTP status, or circuit-open errors.
 - Bearer tokens and request IDs must not contain control characters used for header injection.
+- Configure either `bearer_token_env` or the legacy direct token argument, never both.
 - A returned `request_id` must match the request; omitted request IDs inherit the request value.
 - Citations must be a list of non-empty strings.
 - Each retrieval requires string `document_id` and `chunk_id`, a finite numeric score,

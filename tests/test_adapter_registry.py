@@ -33,6 +33,18 @@ class FailingAdapter:
         raise RuntimeError("connection failed with token=secret-value")
 
 
+class SecretAnswerAdapter:
+    """模拟目标系统把敏感值放入回答，连接探测仍不得回显正文。"""
+
+    def invoke(self, question: str, *, request_id: str) -> AdapterResponse:
+        return AdapterResponse(
+            request_id=request_id,
+            answer="runtime-secret",
+            citations=[],
+            retrievals=[],
+        )
+
+
 class IncompleteAdapter:
     """模拟成功返回但缺少评测所需字段的目标系统。"""
 
@@ -112,6 +124,22 @@ class AdapterRegistryTests(unittest.TestCase):
         self.assertEqual(502, context.exception.status_code)
         self.assertEqual("adapter_connection_failed", context.exception.detail["code"])
         self.assertNotIn("secret-value", str(context.exception.detail))
+
+    def test_adapter_connection_endpoint_never_echoes_answer_content(self) -> None:
+        service = EvalKitService(InMemoryRepository())
+        router = create_router(
+            service, AdapterRegistry({"secret-answer": SecretAnswerAdapter()})
+        )
+        probe = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/adapters/test"
+        )
+
+        result = probe(TestAdapterRequest(adapter_id="secret-answer"))
+
+        self.assertTrue(result["answer_present"])
+        self.assertNotIn("runtime-secret", str(result))
 
     def test_adapter_domain_models_validate_and_redact_version_snapshot(self) -> None:
         config = AdapterConfig("adapter-1", " HR assistant ", AdapterType.HTTP)

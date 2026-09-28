@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass, field
+from os import environ
 from time import monotonic, sleep
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -62,10 +64,12 @@ class AdapterContractError(ValueError):
 @dataclass(slots=True)
 class HttpTargetAgentAdapter:
     """封装请求ID、可选鉴权、超时、重试和响应校验。"""
+
     endpoint: str
     timeout_seconds: float = 15.0
     retries: int = 1
-    bearer_token: str | None = None
+    bearer_token: str | None = field(default=None, repr=False)
+    bearer_token_env: str | None = None
     backoff_base_seconds: float = 0.25
     circuit_failure_threshold: int = 3
     circuit_recovery_seconds: float = 30.0
@@ -105,6 +109,17 @@ class HttpTargetAgentAdapter:
             or not 0 < self.circuit_recovery_seconds <= 3600
         ):
             raise ValueError("circuit_recovery_seconds must be between 0 and 3600")
+        if self.bearer_token is not None and self.bearer_token_env is not None:
+            raise ValueError("configure bearer_token or bearer_token_env, not both")
+        if self.bearer_token_env is not None:
+            env_name = self.bearer_token_env.strip()
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", env_name):
+                raise ValueError("bearer_token_env must be a valid environment variable name")
+            token_from_env = environ.get(env_name)
+            if token_from_env is None:
+                raise ValueError(f"bearer token environment variable is not set: {env_name}")
+            self.bearer_token_env = env_name
+            self.bearer_token = token_from_env
         if self.bearer_token is not None:
             token = self.bearer_token.strip()
             if not token:

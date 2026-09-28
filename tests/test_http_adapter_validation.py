@@ -32,6 +32,48 @@ class FakeResponse:
 
 
 class HttpAdapterValidationTests(unittest.TestCase):
+    def test_bearer_token_is_loaded_from_environment_without_repr_leak(self) -> None:
+        payload = {
+            "request_id": "request-env",
+            "answer": "answer",
+            "citations": [],
+            "retrievals": [],
+            "events": [],
+        }
+        with patch.dict(
+            "app.http_adapter.environ", {"EVALKIT_HTTP_TOKEN": "runtime-secret"}
+        ):
+            adapter = HttpTargetAgentAdapter(
+                "https://example.test/query",
+                bearer_token_env="EVALKIT_HTTP_TOKEN",
+                retries=0,
+            )
+
+        self.assertNotIn("runtime-secret", repr(adapter))
+        with patch("app.http_adapter.urlopen", return_value=FakeResponse(payload)) as mocked:
+            adapter.invoke("question", request_id="request-env")
+
+        request = mocked.call_args.args[0]
+        self.assertEqual("Bearer runtime-secret", request.get_header("Authorization"))
+
+    def test_bearer_token_environment_configuration_fails_safely(self) -> None:
+        with (
+            patch.dict("app.http_adapter.environ", {}, clear=True),
+            self.assertRaisesRegex(ValueError, "EVALKIT_MISSING_TOKEN") as context,
+        ):
+            HttpTargetAgentAdapter(
+                "https://example.test/query",
+                bearer_token_env="EVALKIT_MISSING_TOKEN",
+            )
+
+        self.assertNotIn("runtime-secret", str(context.exception))
+        with self.assertRaises(ValueError):
+            HttpTargetAgentAdapter(
+                "https://example.test/query",
+                bearer_token="direct-secret",
+                bearer_token_env="EVALKIT_HTTP_TOKEN",
+            )
+
     def test_transient_http_errors_use_exponential_backoff(self) -> None:
         adapter = HttpTargetAgentAdapter(
             "https://example.test/query",
@@ -149,6 +191,10 @@ class HttpAdapterValidationTests(unittest.TestCase):
             {
                 "endpoint": "https://example.test/query",
                 "bearer_token": "token\r\nX-Injected: true",
+            },
+            {
+                "endpoint": "https://example.test/query",
+                "bearer_token_env": "INVALID-NAME",
             },
         ]
         for options in invalid_options:
