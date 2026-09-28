@@ -26,6 +26,7 @@ class AdapterResponse:
     citations: list[str]
     retrievals: list[RetrievedChunk]
     events: list[dict[str, Any]] = field(default_factory=list)
+    missing_fields: list[str] = field(default_factory=list)
 
 
 class TargetAgentAdapter(Protocol):

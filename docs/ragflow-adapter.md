@@ -20,3 +20,7 @@ contains synthetic data only.
 
 The API key is a runtime secret and must not be committed. Tests use a fake
 HTTP response and do not contact a RAGFlow deployment.
+
+If choices or reference chunks are omitted, the adapter preserves the missing
+fields and EvalKit records the case as `not_evaluable`. An explicitly returned
+empty chunk collection remains distinguishable from an omitted collection.

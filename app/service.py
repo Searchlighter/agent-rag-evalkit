@@ -488,7 +488,15 @@ class EvalKitService:
         output = StringIO()
         writer = csv.DictWriter(
             output,
-            fieldnames=["case_id", "status", "recall_at_k", "mrr", "citation_coverage", "error"],
+            fieldnames=[
+                "case_id",
+                "status",
+                "recall_at_k",
+                "mrr",
+                "citation_coverage",
+                "not_evaluable_reasons",
+                "error",
+            ],
         )
         writer.writeheader()
         for item in self.list_case_results(run_id):
@@ -498,6 +506,7 @@ class EvalKitService:
                 "recall_at_k": item.metrics.get("recall_at_k"),
                 "mrr": item.metrics.get("mrr"),
                 "citation_coverage": item.metrics.get("citation_coverage"),
+                "not_evaluable_reasons": "|".join(item.not_evaluable_reasons),
                 "error": item.error or "",
             })
         return output.getvalue()
@@ -645,6 +654,9 @@ class EvalKitService:
             "model_id": run.model_id,
             "badcase_count": badcase_count,
             "completed_case_count": len(results),
+            "not_evaluable_case_count": sum(
+                item.status == "not_evaluable" for item in results
+            ),
             "metrics": {
                 "recall_at_k": mean_metric([item.metrics.get("recall_at_k") for item in results]),
                 "mrr": mean_metric([item.metrics.get("mrr") for item in results]),
@@ -720,6 +732,12 @@ class EvalKitService:
         request_id = f"{run.id}:{case.id}"
         try:
             response = adapter.invoke(case.question, request_id=request_id)
+            missing_fields = set(response.missing_fields)
+            if not response.answer.strip():
+                missing_fields.add("answer")
+            not_evaluable_reasons = [
+                f"missing_{field_name}" for field_name in sorted(missing_fields)
+            ]
             retrieval_ids = [f"{item.document_id}#{item.chunk_id}" for item in response.retrievals]
             retrieval_candidates = [
                 {
@@ -742,17 +760,30 @@ class EvalKitService:
                 id=new_id("result"),
                 eval_run_id=run.id,
                 case_id=case.id,
-                status="succeeded",
+                status="not_evaluable" if not_evaluable_reasons else "succeeded",
                 answer=response.answer,
                 citations=response.citations,
                 retrieval_ids=retrieval_ids,
                 retrieval_candidates=retrieval_candidates,
-                metrics={
-                    "recall_at_k": recall_at_k(case.expected_evidence, retrieval_ids, retrieval_k),
-                    "mrr": reciprocal_rank(case.expected_evidence, retrieval_ids),
-                    "citation_coverage": citation_coverage(case.expected_evidence, response.citations),
-                },
+                metrics=(
+                    {
+                        "recall_at_k": None,
+                        "mrr": None,
+                        "citation_coverage": None,
+                    }
+                    if not_evaluable_reasons
+                    else {
+                        "recall_at_k": recall_at_k(
+                            case.expected_evidence, retrieval_ids, retrieval_k
+                        ),
+                        "mrr": reciprocal_rank(case.expected_evidence, retrieval_ids),
+                        "citation_coverage": citation_coverage(
+                            case.expected_evidence, response.citations
+                        ),
+                    }
+                ),
                 quality_checks=quality_checks,
+                not_evaluable_reasons=not_evaluable_reasons,
                 trace_events=response.events,
             )
         except Exception as error:

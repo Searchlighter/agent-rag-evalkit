@@ -345,6 +345,7 @@ class CaseResult:
     reviewed_by: str = ""
     reviewed_at: datetime | None = None
     error: str | None = None
+    not_evaluable_reasons: list[str] = field(default_factory=list)
     trace_events: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=now)
 

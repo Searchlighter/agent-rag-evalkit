@@ -76,12 +76,24 @@ class RagFlowChatAdapter:
         if not isinstance(raw, dict):
             raise RagFlowAdapterError("RAGFlow response must be an object")
         choices = raw.get("choices")
-        if not isinstance(choices, list) or not choices:
-            raise RagFlowAdapterError("RAGFlow response requires choices")
+        if choices is None or choices == []:
+            return AdapterResponse(
+                request_id=request_id,
+                answer="",
+                citations=[],
+                retrievals=[],
+                events=[],
+                missing_fields=["answer", "citations", "retrievals", "trace"],
+            )
+        if not isinstance(choices, list):
+            raise RagFlowAdapterError("RAGFlow response choices must be a list")
         message = choices[0].get("message") if isinstance(choices[0], dict) else None
         if not isinstance(message, dict) or not isinstance(message.get("content"), str):
             raise RagFlowAdapterError("RAGFlow choice requires message.content")
 
+        missing_fields: list[str] = []
+        if "reference" not in message:
+            missing_fields.extend(["citations", "retrievals"])
         reference = message.get("reference") or {}
         chunks = reference.get("chunks", {}) if isinstance(reference, dict) else {}
         if isinstance(chunks, dict):
@@ -133,4 +145,5 @@ class RagFlowChatAdapter:
                     "usage": usage,
                 },
             ],
+            missing_fields=missing_fields,
         )

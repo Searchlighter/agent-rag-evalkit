@@ -94,11 +94,24 @@ class HttpTargetAgentAdapter:
 
     @staticmethod
     def _parse_response(raw: dict[str, Any], request_id: str) -> AdapterResponse:
-        if not isinstance(raw, dict) or not isinstance(raw.get("answer"), str):
+        if not isinstance(raw, dict):
+            raise AdapterContractError("response must be an object")
+        if "answer" in raw and not isinstance(raw["answer"], str):
             raise AdapterContractError("response.answer must be a string")
+        missing_fields = [
+            logical_name
+            for payload_name, logical_name in (
+                ("answer", "answer"),
+                ("citations", "citations"),
+                ("retrievals", "retrievals"),
+                ("events", "trace"),
+            )
+            if payload_name not in raw
+        ]
         response_request_id = raw.get("request_id", request_id)
         if not isinstance(response_request_id, str) or response_request_id != request_id:
             raise AdapterContractError("response.request_id must match the request")
+        answer = raw.get("answer", "")
         citations = raw.get("citations", [])
         retrievals = raw.get("retrievals", [])
         events = raw.get("events", [])
@@ -144,8 +157,9 @@ class HttpTargetAgentAdapter:
             raise AdapterContractError("response.events must be an object list")
         return AdapterResponse(
             request_id=response_request_id,
-            answer=raw["answer"],
+            answer=answer,
             citations=citations,
             retrievals=parsed_retrievals,
             events=events,
+            missing_fields=missing_fields,
         )

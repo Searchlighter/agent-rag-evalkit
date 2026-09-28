@@ -24,6 +24,16 @@ class FakeResponse:
 
 
 class HttpAdapterValidationTests(unittest.TestCase):
+    def test_missing_response_fields_are_preserved_for_evaluation_diagnosis(self) -> None:
+        response = HttpTargetAgentAdapter._parse_response(
+            {"request_id": "request-1"}, "request-1"
+        )
+
+        self.assertEqual("", response.answer)
+        self.assertEqual([], response.citations)
+        self.assertEqual([], response.retrievals)
+        self.assertEqual(["answer", "citations", "retrievals", "trace"], response.missing_fields)
+
     def test_configuration_rejects_invalid_urls_limits_and_header_injection(self) -> None:
         invalid_options = [
             {"endpoint": "ftp://example.test/query"},

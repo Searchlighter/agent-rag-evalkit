@@ -2,10 +2,10 @@ from pathlib import Path
 import json
 import unittest
 
-from app.dify_adapter import DifyAdapterError, DifyChatAdapter
+from app.dify_adapter import DifyChatAdapter
 from app.http_adapter import AdapterContractError, HttpTargetAgentAdapter
 from app.mock_rag_service import build_mock_response
-from app.ragflow_adapter import RagFlowAdapterError, RagFlowChatAdapter
+from app.ragflow_adapter import RagFlowChatAdapter
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,9 +23,11 @@ class AdapterContractTests(unittest.TestCase):
         self.assertEqual("policy-document", response.retrievals[0].document_id)
         self.assertEqual("dify", response.events[0]["source"])
 
-    def test_dify_rejects_missing_answer(self) -> None:
-        with self.assertRaises(DifyAdapterError):
-            DifyChatAdapter._parse_response({"metadata": {}}, "request")
+    def test_dify_marks_missing_answer_and_retrieval_fields(self) -> None:
+        response = DifyChatAdapter._parse_response({"metadata": {}}, "request")
+
+        self.assertEqual("", response.answer)
+        self.assertEqual(["answer", "citations", "retrievals"], response.missing_fields)
 
     def test_ragflow_example_maps_to_evalkit_contract(self) -> None:
         payload = json.loads(
@@ -38,9 +40,12 @@ class AdapterContractTests(unittest.TestCase):
         self.assertEqual(0.88, response.retrievals[0].score)
         self.assertEqual(0.91, response.retrievals[0].metadata["vector_similarity"])
 
-    def test_ragflow_rejects_missing_choices(self) -> None:
-        with self.assertRaises(RagFlowAdapterError):
-            RagFlowChatAdapter._parse_response({"choices": []}, "request")
+    def test_ragflow_marks_missing_choices_as_missing_evaluation_fields(self) -> None:
+        response = RagFlowChatAdapter._parse_response({"choices": []}, "request")
+
+        self.assertEqual(
+            ["answer", "citations", "retrievals", "trace"], response.missing_fields
+        )
 
     def test_generic_http_contract_accepts_synthetic_mock_service(self) -> None:
         payload = build_mock_response("如何申请差旅报销？", "http-request")

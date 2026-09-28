@@ -29,3 +29,5 @@ Configuration and response validation rules:
 - Citations must be a list of non-empty strings.
 - Each retrieval requires string `document_id` and `chunk_id`, a finite numeric score,
   a positive integer rank, and object metadata.
+- A field that is omitted is recorded as missing and produces a `not_evaluable` case;
+  an explicitly returned empty list remains an evaluable empty result.

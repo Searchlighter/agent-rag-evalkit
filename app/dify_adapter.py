@@ -69,11 +69,19 @@ class DifyChatAdapter:
 
     @staticmethod
     def _parse_response(raw: object, request_id: str) -> AdapterResponse:
-        if not isinstance(raw, dict) or not isinstance(raw.get("answer"), str):
+        if not isinstance(raw, dict):
+            raise DifyAdapterError("Dify response must be an object")
+        if "answer" in raw and not isinstance(raw["answer"], str):
             raise DifyAdapterError("Dify response must contain a string answer")
+        missing_fields: list[str] = []
+        answer = raw.get("answer", "")
+        if "answer" not in raw:
+            missing_fields.append("answer")
         metadata = raw.get("metadata") or {}
         if not isinstance(metadata, dict):
             raise DifyAdapterError("Dify response metadata must be an object")
+        if "retriever_resources" not in metadata:
+            missing_fields.extend(["citations", "retrievals"])
         resources = metadata.get("retriever_resources") or []
         if not isinstance(resources, list):
             raise DifyAdapterError("metadata.retriever_resources must be a list")
@@ -107,7 +115,7 @@ class DifyChatAdapter:
         usage = metadata.get("usage") if isinstance(metadata.get("usage"), dict) else {}
         return AdapterResponse(
             request_id=request_id,
-            answer=raw["answer"],
+            answer=answer,
             citations=citations,
             retrievals=retrievals,
             events=[
@@ -121,10 +129,11 @@ class DifyChatAdapter:
                     "type": "llm",
                     "name": "dify-generation",
                     "source": "dify",
-                    "output": raw["answer"],
+                    "output": answer,
                     "message_id": raw.get("message_id"),
                     "conversation_id": raw.get("conversation_id"),
                     "usage": usage,
                 },
             ],
+            missing_fields=missing_fields,
         )

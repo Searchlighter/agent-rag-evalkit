@@ -18,3 +18,7 @@ events. examples/dify_blocking_response.json contains synthetic data only.
 Do not place a Dify API key in source control. Instantiate DifyChatAdapter from
 runtime secrets. This Demo tests parsing and request construction with a fake
 HTTP response; it does not contact a Dify server.
+
+If the response omits `answer` or `metadata.retriever_resources`, the adapter
+preserves those omissions as `missing_fields`. EvalKit records the case as
+`not_evaluable` instead of treating missing evidence as a valid empty retrieval.

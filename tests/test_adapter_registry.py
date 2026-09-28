@@ -33,7 +33,46 @@ class FailingAdapter:
         raise RuntimeError("connection failed with token=secret-value")
 
 
+class IncompleteAdapter:
+    """模拟成功返回但缺少评测所需字段的目标系统。"""
+
+    def invoke(self, question: str, *, request_id: str) -> AdapterResponse:
+        return AdapterResponse(
+            request_id=request_id,
+            answer="",
+            citations=[],
+            retrievals=[],
+            missing_fields=["answer", "citations", "retrievals", "trace"],
+        )
+
+
 class AdapterRegistryTests(unittest.TestCase):
+    def test_missing_adapter_fields_create_not_evaluable_case(self) -> None:
+        service = EvalKitService(InMemoryRepository())
+        dataset = service.create_dataset("incomplete response", "tester")
+        version = service.import_dataset_version(
+            dataset.id,
+            [{
+                "id": "case-1",
+                "question": "policy",
+                "expected_evidence": ["doc-a#chunk-1"],
+            }],
+            "tester",
+        )
+        config = service.create_config("top-1", 1)
+        run = service.create_eval_run(version.id, config.id, "incomplete")
+
+        summary = service.execute_eval_run(run.id, IncompleteAdapter())
+        result = service.list_case_results(run.id)[0]
+
+        self.assertEqual("not_evaluable", result.status)
+        self.assertEqual(1, summary["not_evaluable_case_count"])
+        self.assertEqual(
+            ["missing_answer", "missing_citations", "missing_retrievals", "missing_trace"],
+            result.not_evaluable_reasons,
+        )
+        self.assertTrue(all(value is None for value in result.metrics.values()))
+
     def test_adapter_connection_endpoint_returns_safe_contract_summary(self) -> None:
         service = EvalKitService(InMemoryRepository())
         router = create_router(
