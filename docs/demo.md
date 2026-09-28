@@ -59,6 +59,18 @@ python -m scripts.demo_http_eval `
 
 模拟服务的接口文档位于 <http://127.0.0.1:8001/docs>，健康检查位于 <http://127.0.0.1:8001/health>。
 
+## 主 API 真实 HTTP 链路验证
+
+自动化集成测试会分别在随机空闲端口启动 Mock RAG 与 EvalKit 主 API，通过 REST API
+创建数据集、配置和运行，再让主 API 的 HTTP Adapter 调用 Mock RAG。测试结束会自动关闭
+两个服务，不占用固定端口：
+
+```powershell
+python -m unittest tests.test_http_api_integration -v
+```
+
+该测试覆盖 4 条样本、连接探测、真实 HTTP 请求、结果保存和聚合指标，不使用网络 Mock。
+
 ## 预期结果
 
 脚本输出 JSON，包括本次选择的非敏感配置、运行状态、聚合指标以及每条 Case 的回答、证据、指标和规则校验结果。输出只记录是否启用鉴权，不包含 Token。默认合成数据应该全部执行成功；这些结果仅说明 Demo 契约和指标链路正确。
