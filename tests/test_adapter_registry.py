@@ -107,6 +107,42 @@ class AdapterRegistryTests(unittest.TestCase):
         self.assertEqual("custom-http", summary["adapter_id"])
         self.assertEqual(1.0, summary["metrics"]["recall_at_k"])
 
+    def test_eval_run_keeps_adapter_version_and_configuration_snapshot(self) -> None:
+        service = EvalKitService(InMemoryRepository())
+        dataset = service.create_dataset("snapshot test", "tester")
+        version = service.import_dataset_version(
+            dataset.id, [{"id": "case-1", "question": "policy"}], "tester"
+        )
+        config = service.create_config("top-1", 1)
+        source_snapshot = {
+            "endpoint": "https://example.test/query",
+            "timeout_seconds": 5,
+        }
+
+        run = service.create_eval_run(
+            version.id,
+            config.id,
+            "custom-http",
+            adapter_version_id="adapter-version-1",
+            adapter_snapshot=source_snapshot,
+            model_id="agent-release-2026-09",
+        )
+        source_snapshot["endpoint"] = "https://changed.test/query"
+        summary = service.get_run_summary(run.id)
+
+        self.assertEqual("adapter-version-1", summary["adapter_version_id"])
+        self.assertEqual("agent-release-2026-09", summary["model_id"])
+        self.assertEqual(
+            "https://example.test/query", summary["adapter_snapshot"]["endpoint"]
+        )
+        with self.assertRaises(ValueError):
+            service.create_eval_run(
+                version.id,
+                config.id,
+                "custom-http",
+                adapter_snapshot={"api_token": "must-not-be-stored"},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

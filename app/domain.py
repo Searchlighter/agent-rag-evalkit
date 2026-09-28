@@ -183,6 +183,26 @@ class AdapterConfig:
 AdapterSettingValue = str | int | float | bool | None
 
 
+def validate_adapter_settings(
+    raw: Mapping[str, AdapterSettingValue],
+) -> dict[str, AdapterSettingValue]:
+    """复制并校验可进入版本或运行快照的非敏感 Adapter 配置。"""
+    settings: dict[str, AdapterSettingValue] = {}
+    for key, value in raw.items():
+        normalized_key = str(key).strip()
+        if not normalized_key:
+            raise ValueError("Adapter settings 的键不能为空")
+        if any(
+            marker in normalized_key.lower()
+            for marker in ("api_key", "password", "secret", "token")
+        ):
+            raise ValueError(f"Adapter settings 禁止保存敏感字段: {normalized_key}")
+        if not isinstance(value, (str, int, float, bool, type(None))):
+            raise ValueError(f"Adapter settings 不支持复杂值: {normalized_key}")
+        settings[normalized_key] = value
+    return settings
+
+
 @dataclass(frozen=True, slots=True)
 class AdapterVersion:
     """不可变的 Adapter 运行配置快照，不保存密钥明文。"""
@@ -205,7 +225,7 @@ class AdapterVersion:
         if not isinstance(self.adapter_type, AdapterType):
             raise ValueError("AdapterVersion.adapter_type 必须是受支持的 AdapterType")
 
-        settings = self._validated_settings(self.settings)
+        settings = validate_adapter_settings(self.settings)
         secret_refs = self._validated_secret_refs(self.secret_refs)
         object.__setattr__(self, "id", adapter_id)
         object.__setattr__(self, "adapter_config_id", config_id)
@@ -223,27 +243,6 @@ class AdapterVersion:
             "secret_refs": {name: "***" for name in self.secret_refs},
             "created_at": self.created_at.isoformat(),
         }
-
-    @staticmethod
-    def _validated_settings(
-        raw: Mapping[str, AdapterSettingValue],
-    ) -> dict[str, AdapterSettingValue]:
-        settings: dict[str, AdapterSettingValue] = {}
-        for key, value in raw.items():
-            normalized_key = str(key).strip()
-            if not normalized_key:
-                raise ValueError("AdapterVersion.settings 的键不能为空")
-            if any(
-                marker in normalized_key.lower()
-                for marker in ("api_key", "password", "secret", "token")
-            ):
-                raise ValueError(
-                    f"AdapterVersion.settings 禁止保存敏感字段: {normalized_key}"
-                )
-            if not isinstance(value, (str, int, float, bool, type(None))):
-                raise ValueError(f"AdapterVersion.settings 不支持复杂值: {normalized_key}")
-            settings[normalized_key] = value
-        return settings
 
     @staticmethod
     def _validated_secret_refs(raw: Mapping[str, str]) -> dict[str, str]:
@@ -264,6 +263,9 @@ class EvalRun:
     dataset_version_id: str
     config_id: str
     adapter_id: str
+    adapter_version_id: str = ""
+    adapter_snapshot: dict[str, AdapterSettingValue] = field(default_factory=dict)
+    model_id: str = ""
     status: EvalRunStatus = EvalRunStatus.QUEUED
     budget_limit: float | None = None
     created_at: datetime = field(default_factory=now)

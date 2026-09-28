@@ -30,6 +30,7 @@ from .domain import (
     TraceEventType,
     new_id,
     now,
+    validate_adapter_settings,
 )
 from .adapter_contract import TargetAgentAdapter
 from .metrics import citation_coverage, empty_retrieval_rate, mean_metric, recall_at_k, reciprocal_rank
@@ -90,25 +91,46 @@ class EvalKitService:
         )
 
     def create_eval_run(
-        self, dataset_version_id: str, config_id: str, adapter_id: str, budget_limit: float | None = None
+        self,
+        dataset_version_id: str,
+        config_id: str,
+        adapter_id: str,
+        budget_limit: float | None = None,
+        adapter_version_id: str = "",
+        adapter_snapshot: dict[str, str | int | float | bool | None] | None = None,
+        model_id: str = "",
     ) -> EvalRun:
-        """绑定数据版本、配置和 Adapter，创建 queued 运行。"""
+        """绑定数据、配置及 Adapter 快照，创建可复现的 queued 运行。"""
         if dataset_version_id not in self.repository.dataset_versions:
             raise KeyError(f"数据集版本不存在：{dataset_version_id}")
         if config_id not in self.repository.configs:
             raise KeyError(f"评测配置不存在：{config_id}")
         if not adapter_id.strip() or (budget_limit is not None and budget_limit < 0):
             raise ValueError("adapter_id 不能为空且预算不能小于 0")
+        snapshot = validate_adapter_settings(adapter_snapshot or {})
         run = self.repository.save_eval_run(
             EvalRun(
                 id=new_id("run"),
                 dataset_version_id=dataset_version_id,
                 config_id=config_id,
                 adapter_id=adapter_id.strip(),
+                adapter_version_id=adapter_version_id.strip(),
+                adapter_snapshot=snapshot,
+                model_id=model_id.strip(),
                 budget_limit=budget_limit,
             )
         )
-        self._audit("create", "eval_run", run.id, "system", {"adapter_id": adapter_id})
+        self._audit(
+            "create",
+            "eval_run",
+            run.id,
+            "system",
+            {
+                "adapter_id": run.adapter_id,
+                "adapter_version_id": run.adapter_version_id,
+                "model_id": run.model_id,
+            },
+        )
         return run
 
     def update_eval_run_status(self, run_id: str, status: EvalRunStatus) -> EvalRun:
@@ -618,6 +640,9 @@ class EvalKitService:
             "dataset_version_id": version.id,
             "dataset_case_count": len(version.cases),
             "adapter_id": run.adapter_id,
+            "adapter_version_id": run.adapter_version_id,
+            "adapter_snapshot": dict(run.adapter_snapshot),
+            "model_id": run.model_id,
             "badcase_count": badcase_count,
             "completed_case_count": len(results),
             "metrics": {

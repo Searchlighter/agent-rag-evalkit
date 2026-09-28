@@ -37,6 +37,11 @@ class CreateEvalRunRequest(BaseModel):
     dataset_version_id: str
     config_id: str
     adapter_id: str
+    adapter_version_id: str = ""
+    adapter_snapshot: dict[str, str | int | float | bool | None] = Field(
+        default_factory=dict
+    )
+    model_id: str = ""
     budget_limit: float | None = Field(default=None, ge=0)
 
 
