@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import unittest
 
+from fastapi import HTTPException
+
 from app.adapter_contract import AdapterResponse, RetrievedChunk
 from app.adapter_registry import AdapterNotFoundError, AdapterRegistry
-from app.api import create_router
+from app.api import TestAdapterRequest, create_router
 from app.domain import AdapterConfig, AdapterType, AdapterVersion
 from app.repository import InMemoryRepository
 from app.service import EvalKitService
@@ -24,7 +26,54 @@ class MatchingAdapter:
         )
 
 
+class FailingAdapter:
+    """模拟包含敏感异常文本的连接失败。"""
+
+    def invoke(self, question: str, *, request_id: str) -> AdapterResponse:
+        raise RuntimeError("connection failed with token=secret-value")
+
+
 class AdapterRegistryTests(unittest.TestCase):
+    def test_adapter_connection_endpoint_returns_safe_contract_summary(self) -> None:
+        service = EvalKitService(InMemoryRepository())
+        router = create_router(
+            service, AdapterRegistry({"custom-http": MatchingAdapter()})
+        )
+        probe = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/adapters/test"
+        )
+
+        result = probe(TestAdapterRequest(adapter_id="custom-http", question="ping"))
+
+        self.assertEqual("ok", result["status"])
+        self.assertTrue(result["response_request_id_matches"])
+        self.assertTrue(result["answer_present"])
+        self.assertEqual(1, result["citation_count"])
+        self.assertEqual(1, result["retrieval_count"])
+        self.assertNotIn("answer", result)
+
+        with self.assertRaises(HTTPException) as context:
+            probe(TestAdapterRequest(adapter_id="missing"))
+        self.assertEqual(404, context.exception.status_code)
+
+    def test_adapter_connection_endpoint_hides_internal_error_text(self) -> None:
+        service = EvalKitService(InMemoryRepository())
+        router = create_router(service, AdapterRegistry({"failing": FailingAdapter()}))
+        probe = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/adapters/test"
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            probe(TestAdapterRequest(adapter_id="failing"))
+
+        self.assertEqual(502, context.exception.status_code)
+        self.assertEqual("adapter_connection_failed", context.exception.detail["code"])
+        self.assertNotIn("secret-value", str(context.exception.detail))
+
     def test_adapter_domain_models_validate_and_redact_version_snapshot(self) -> None:
         config = AdapterConfig("adapter-1", " HR assistant ", AdapterType.HTTP)
         version = AdapterVersion(

@@ -10,7 +10,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from .adapter_registry import AdapterNotFoundError, AdapterRegistry, create_default_registry
-from .domain import BadcaseSeverity, BadcaseStatus, EvalRunStatus
+from .domain import BadcaseSeverity, BadcaseStatus, EvalRunStatus, new_id
 from .service import EvalKitService
 
 
@@ -43,6 +43,13 @@ class CreateEvalRunRequest(BaseModel):
     )
     model_id: str = ""
     budget_limit: float | None = Field(default=None, ge=0)
+
+
+class TestAdapterRequest(BaseModel):
+    """对已注册 Adapter 发起一次不保存结果的轻量探测。"""
+
+    adapter_id: str = Field(min_length=1)
+    question: str = Field(default="EvalKit connection test", min_length=1, max_length=500)
 
 
 class ChangeRunStatusRequest(BaseModel):
@@ -88,6 +95,34 @@ def create_router(
     """将应用服务绑定为版本化 REST 路由。"""
     router = APIRouter(prefix="/api/v1")
     adapters = adapter_registry or create_default_registry()
+
+    @router.post("/adapters/test")
+    def test_adapter_connection(request: TestAdapterRequest) -> dict[str, Any]:
+        """验证 Adapter 可调用，并返回不含回答正文的契约摘要。"""
+        request_id = new_id("probe")
+        try:
+            adapter = adapters.resolve(request.adapter_id)
+            response = adapter.invoke(request.question, request_id=request_id)
+        except AdapterNotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except Exception as error:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "adapter_connection_failed",
+                    "error_type": type(error).__name__,
+                },
+            ) from error
+        return {
+            "status": "ok",
+            "adapter_id": request.adapter_id,
+            "request_id": request_id,
+            "response_request_id_matches": response.request_id == request_id,
+            "answer_present": bool(response.answer.strip()),
+            "citation_count": len(response.citations),
+            "retrieval_count": len(response.retrievals),
+            "event_count": len(response.events),
+        }
 
     @router.post("/datasets")
     def create_dataset(request: CreateDatasetRequest) -> dict[str, Any]:
