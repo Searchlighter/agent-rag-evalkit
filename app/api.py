@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from .adapter_contract import MockRagAdapter
+from .adapter_registry import AdapterNotFoundError, AdapterRegistry, create_default_registry
 from .domain import BadcaseSeverity, BadcaseStatus, EvalRunStatus
 from .service import EvalKitService
 
@@ -77,9 +77,12 @@ class ReviewCaseResultRequest(BaseModel):
     note: str = ""
 
 
-def create_router(service: EvalKitService) -> APIRouter:
+def create_router(
+    service: EvalKitService, adapter_registry: AdapterRegistry | None = None
+) -> APIRouter:
     """将应用服务绑定为版本化 REST 路由。"""
     router = APIRouter(prefix="/api/v1")
+    adapters = adapter_registry or create_default_registry()
 
     @router.post("/datasets")
     def create_dataset(request: CreateDatasetRequest) -> dict[str, Any]:
@@ -138,11 +141,15 @@ def create_router(service: EvalKitService) -> APIRouter:
 
     @router.post("/eval-runs/{run_id}/execute")
     def execute_run(run_id: str) -> dict[str, Any]:
-        """通过内置 Mock Adapter 执行同步评测。"""
+        """使用运行绑定的 Adapter 执行同步评测。"""
         try:
-            return service.execute_eval_run(run_id, adapter=MockRagAdapter())
+            run = service.get_run_summary(run_id)
+            adapter = adapters.resolve(run["adapter_id"])
+            return service.execute_eval_run(run_id, adapter=adapter)
         except KeyError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
+        except AdapterNotFoundError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
