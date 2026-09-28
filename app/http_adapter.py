@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from time import monotonic, sleep
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -15,6 +16,43 @@ from .adapter_contract import AdapterResponse, RetrievedChunk
 
 class AdapterTransportError(RuntimeError):
     """The target service was unavailable after retry attempts."""
+
+    code = "adapter_transport_error"
+
+    def __init__(self, message: str, attempts: int) -> None:
+        super().__init__(message)
+        self.attempts = attempts
+
+
+class AdapterTimeoutError(AdapterTransportError):
+    """目标系统在配置的超时时间内没有响应。"""
+
+    code = "adapter_timeout"
+
+
+class AdapterNetworkError(AdapterTransportError):
+    """DNS、连接或其他网络传输失败。"""
+
+    code = "adapter_network_error"
+
+
+class AdapterHttpStatusError(AdapterTransportError):
+    """目标系统返回了非成功 HTTP 状态码。"""
+
+    code = "adapter_http_status"
+
+    def __init__(self, status_code: int, attempts: int) -> None:
+        super().__init__(f"target returned HTTP {status_code}", attempts)
+        self.status_code = status_code
+
+
+class AdapterCircuitOpenError(AdapterTransportError):
+    """连续失败达到阈值后，熔断器暂时拒绝外部调用。"""
+
+    code = "adapter_circuit_open"
+
+    def __init__(self) -> None:
+        super().__init__("adapter circuit is open", attempts=0)
 
 
 class AdapterContractError(ValueError):
@@ -28,6 +66,11 @@ class HttpTargetAgentAdapter:
     timeout_seconds: float = 15.0
     retries: int = 1
     bearer_token: str | None = None
+    backoff_base_seconds: float = 0.25
+    circuit_failure_threshold: int = 3
+    circuit_recovery_seconds: float = 30.0
+    _consecutive_failures: int = field(default=0, init=False, repr=False)
+    _circuit_opened_at: float | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         """在发起网络请求前校验地址、资源限制和鉴权值。"""
@@ -47,6 +90,21 @@ class HttpTargetAgentAdapter:
             raise ValueError("timeout_seconds must be between 0 and 300")
         if isinstance(self.retries, bool) or not 0 <= self.retries <= 5:
             raise ValueError("retries must be between 0 and 5")
+        if (
+            not math.isfinite(self.backoff_base_seconds)
+            or not 0 <= self.backoff_base_seconds <= 10
+        ):
+            raise ValueError("backoff_base_seconds must be between 0 and 10")
+        if (
+            isinstance(self.circuit_failure_threshold, bool)
+            or not 1 <= self.circuit_failure_threshold <= 100
+        ):
+            raise ValueError("circuit_failure_threshold must be between 1 and 100")
+        if (
+            not math.isfinite(self.circuit_recovery_seconds)
+            or not 0 < self.circuit_recovery_seconds <= 3600
+        ):
+            raise ValueError("circuit_recovery_seconds must be between 0 and 3600")
         if self.bearer_token is not None:
             token = self.bearer_token.strip()
             if not token:
@@ -61,6 +119,7 @@ class HttpTargetAgentAdapter:
         if not isinstance(request_id, str) or not request_id.strip():
             raise ValueError("request_id must be a non-empty string")
         self._validate_header_value(request_id, "request_id")
+        self._ensure_circuit_available()
 
         payload = json.dumps(
             {"question": question, "request_id": request_id}
@@ -74,15 +133,64 @@ class HttpTargetAgentAdapter:
             try:
                 with urlopen(request, timeout=self.timeout_seconds) as response:
                     raw_response = json.loads(response.read().decode("utf-8"))
-                    return self._parse_response(raw_response, request_id)
-            except (HTTPError, URLError, TimeoutError) as error:
-                if attempt == self.retries:
-                    raise AdapterTransportError(
-                        f"HTTP adapter failed after {attempt + 1} attempt(s): {error}"
-                    ) from error
+                    parsed_response = self._parse_response(raw_response, request_id)
+                    self._reset_circuit()
+                    return parsed_response
+            except HTTPError as error:
+                retryable = error.code in {408, 425, 429} or error.code >= 500
+                classified = AdapterHttpStatusError(error.code, attempt + 1)
+                if self._retry_or_raise(classified, error, attempt, retryable):
+                    continue
+            except TimeoutError as error:
+                classified = AdapterTimeoutError(
+                    "target request timed out", attempts=attempt + 1
+                )
+                if self._retry_or_raise(classified, error, attempt, retryable=True):
+                    continue
+            except URLError as error:
+                if isinstance(error.reason, TimeoutError):
+                    classified = AdapterTimeoutError(
+                        "target request timed out", attempts=attempt + 1
+                    )
+                else:
+                    classified = AdapterNetworkError(
+                        "target network request failed", attempts=attempt + 1
+                    )
+                if self._retry_or_raise(classified, error, attempt, retryable=True):
+                    continue
             except json.JSONDecodeError as error:
                 raise AdapterContractError("target returned invalid JSON") from error
-        raise AdapterTransportError("unreachable adapter retry state")
+        raise RuntimeError("unreachable adapter retry state")
+
+    def _retry_or_raise(
+        self,
+        classified: AdapterTransportError,
+        original: Exception,
+        attempt: int,
+        retryable: bool,
+    ) -> bool:
+        """对可恢复错误退避重试；最终失败计入熔断器。"""
+        if retryable and attempt < self.retries:
+            sleep(self.backoff_base_seconds * (2**attempt))
+            return True
+        self._record_failure()
+        raise classified from original
+
+    def _ensure_circuit_available(self) -> None:
+        if self._circuit_opened_at is None:
+            return
+        if monotonic() - self._circuit_opened_at < self.circuit_recovery_seconds:
+            raise AdapterCircuitOpenError()
+        self._reset_circuit()
+
+    def _record_failure(self) -> None:
+        self._consecutive_failures += 1
+        if self._consecutive_failures >= self.circuit_failure_threshold:
+            self._circuit_opened_at = monotonic()
+
+    def _reset_circuit(self) -> None:
+        self._consecutive_failures = 0
+        self._circuit_opened_at = None
 
     @staticmethod
     def _validate_header_value(value: str, field_name: str) -> None:

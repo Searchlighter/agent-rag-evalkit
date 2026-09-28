@@ -17,13 +17,18 @@ The service must return JSON with this shape:
     }
 
 The adapter uses POST, an X-Request-ID header, optional Bearer authorization,
-a configurable timeout, and immediate retries for network/HTTP failures.
+a configurable timeout, exponential-backoff retries, and a per-adapter circuit breaker.
 Never put a bearer token in source code; provide it at runtime.
 
 Configuration and response validation rules:
 
 - `endpoint` must be an absolute HTTP/HTTPS URL without embedded credentials or a fragment.
 - `timeout_seconds` must be greater than 0 and no more than 300; retries are limited to 0-5.
+- Retries apply to timeouts, network failures, HTTP 408/425/429, and HTTP 5xx responses.
+  Other HTTP 4xx responses fail immediately. Backoff doubles after each failed attempt.
+- Consecutive failed calls open the circuit. Calls fail fast until the recovery window elapses;
+  the first successful recovery call closes the circuit and resets the failure count.
+- Transport errors are classified as timeout, network, HTTP status, or circuit-open errors.
 - Bearer tokens and request IDs must not contain control characters used for header injection.
 - A returned `request_id` must match the request; omitted request IDs inherit the request value.
 - Citations must be a list of non-empty strings.
