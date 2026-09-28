@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
+from types import MappingProxyType
 from typing import Any
 
 
@@ -27,6 +29,16 @@ class EvalRunStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     BUDGET_EXCEEDED = "budget_exceeded"
+
+
+class AdapterType(str, Enum):
+    """EvalKit 当前识别的被测系统接入类型。"""
+
+    MOCK = "mock"
+    HTTP = "http"
+    DIFY = "dify"
+    RAGFLOW = "ragflow"
+    LANGGRAPH = "langgraph"
 
 
 class TraceEventType(str, Enum):
@@ -145,6 +157,104 @@ class EvaluationConfig:
     timeout_seconds: int = 30
     max_concurrency: int = 1
     seed: int = 42
+
+
+@dataclass(slots=True)
+class AdapterConfig:
+    """可启停的 Adapter 逻辑配置及当前版本引用。"""
+
+    id: str
+    name: str
+    adapter_type: AdapterType
+    current_version_id: str | None = None
+    enabled: bool = True
+    created_at: datetime = field(default_factory=now)
+    updated_at: datetime = field(default_factory=now)
+
+    def __post_init__(self) -> None:
+        self.id = self.id.strip()
+        self.name = self.name.strip()
+        if not self.id or not self.name:
+            raise ValueError("AdapterConfig.id 和 name 不能为空")
+        if not isinstance(self.adapter_type, AdapterType):
+            raise ValueError("AdapterConfig.adapter_type 必须是受支持的 AdapterType")
+
+
+AdapterSettingValue = str | int | float | bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class AdapterVersion:
+    """不可变的 Adapter 运行配置快照，不保存密钥明文。"""
+
+    id: str
+    adapter_config_id: str
+    version_number: int
+    adapter_type: AdapterType
+    settings: Mapping[str, AdapterSettingValue] = field(default_factory=dict)
+    secret_refs: Mapping[str, str] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=now)
+
+    def __post_init__(self) -> None:
+        adapter_id = self.id.strip()
+        config_id = self.adapter_config_id.strip()
+        if not adapter_id or not config_id:
+            raise ValueError("AdapterVersion.id 和 adapter_config_id 不能为空")
+        if self.version_number < 1:
+            raise ValueError("AdapterVersion.version_number 必须大于 0")
+        if not isinstance(self.adapter_type, AdapterType):
+            raise ValueError("AdapterVersion.adapter_type 必须是受支持的 AdapterType")
+
+        settings = self._validated_settings(self.settings)
+        secret_refs = self._validated_secret_refs(self.secret_refs)
+        object.__setattr__(self, "id", adapter_id)
+        object.__setattr__(self, "adapter_config_id", config_id)
+        object.__setattr__(self, "settings", MappingProxyType(settings))
+        object.__setattr__(self, "secret_refs", MappingProxyType(secret_refs))
+
+    def public_snapshot(self) -> dict[str, Any]:
+        """返回可用于 API、日志和审计的脱敏版本快照。"""
+        return {
+            "id": self.id,
+            "adapter_config_id": self.adapter_config_id,
+            "version_number": self.version_number,
+            "adapter_type": self.adapter_type.value,
+            "settings": dict(self.settings),
+            "secret_refs": {name: "***" for name in self.secret_refs},
+            "created_at": self.created_at.isoformat(),
+        }
+
+    @staticmethod
+    def _validated_settings(
+        raw: Mapping[str, AdapterSettingValue],
+    ) -> dict[str, AdapterSettingValue]:
+        settings: dict[str, AdapterSettingValue] = {}
+        for key, value in raw.items():
+            normalized_key = str(key).strip()
+            if not normalized_key:
+                raise ValueError("AdapterVersion.settings 的键不能为空")
+            if any(
+                marker in normalized_key.lower()
+                for marker in ("api_key", "password", "secret", "token")
+            ):
+                raise ValueError(
+                    f"AdapterVersion.settings 禁止保存敏感字段: {normalized_key}"
+                )
+            if not isinstance(value, (str, int, float, bool, type(None))):
+                raise ValueError(f"AdapterVersion.settings 不支持复杂值: {normalized_key}")
+            settings[normalized_key] = value
+        return settings
+
+    @staticmethod
+    def _validated_secret_refs(raw: Mapping[str, str]) -> dict[str, str]:
+        secret_refs: dict[str, str] = {}
+        for key, value in raw.items():
+            normalized_key = str(key).strip()
+            normalized_value = str(value).strip()
+            if not normalized_key or not normalized_value:
+                raise ValueError("AdapterVersion.secret_refs 的名称和引用不能为空")
+            secret_refs[normalized_key] = normalized_value
+        return secret_refs
 
 
 @dataclass(slots=True)

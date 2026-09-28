@@ -7,6 +7,7 @@ import unittest
 from app.adapter_contract import AdapterResponse, RetrievedChunk
 from app.adapter_registry import AdapterNotFoundError, AdapterRegistry
 from app.api import create_router
+from app.domain import AdapterConfig, AdapterType, AdapterVersion
 from app.repository import InMemoryRepository
 from app.service import EvalKitService
 
@@ -24,6 +25,43 @@ class MatchingAdapter:
 
 
 class AdapterRegistryTests(unittest.TestCase):
+    def test_adapter_domain_models_validate_and_redact_version_snapshot(self) -> None:
+        config = AdapterConfig("adapter-1", " HR assistant ", AdapterType.HTTP)
+        version = AdapterVersion(
+            id="adapter-version-1",
+            adapter_config_id=config.id,
+            version_number=1,
+            adapter_type=config.adapter_type,
+            settings={"endpoint": "https://example.test/query", "timeout_seconds": 5},
+            secret_refs={"bearer_token": "EVALKIT_HTTP_TOKEN"},
+        )
+
+        self.assertEqual("HR assistant", config.name)
+        self.assertEqual("https://example.test/query", version.settings["endpoint"])
+        self.assertEqual("***", version.public_snapshot()["secret_refs"]["bearer_token"])
+        with self.assertRaises(TypeError):
+            version.settings["endpoint"] = "https://malicious.test"  # type: ignore[index]
+
+    def test_adapter_version_rejects_invalid_version_and_complex_settings(self) -> None:
+        with self.assertRaises(ValueError):
+            AdapterVersion("v1", "adapter-1", 0, AdapterType.HTTP)
+        with self.assertRaises(ValueError):
+            AdapterVersion(
+                "v1",
+                "adapter-1",
+                1,
+                AdapterType.HTTP,
+                settings={"headers": {"X-Test": "value"}},  # type: ignore[dict-item]
+            )
+        with self.assertRaises(ValueError):
+            AdapterVersion(
+                "v1",
+                "adapter-1",
+                1,
+                AdapterType.HTTP,
+                settings={"api_key": "must-not-be-stored-here"},
+            )
+
     def test_registry_resolves_registered_adapter_and_rejects_unknown_id(self) -> None:
         adapter = MatchingAdapter()
         registry = AdapterRegistry({"custom-http": adapter})
