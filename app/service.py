@@ -36,7 +36,7 @@ from .adapter_contract import TargetAgentAdapter
 from .metrics import citation_coverage, empty_retrieval_rate, mean_metric, recall_at_k, reciprocal_rank
 from .quality import validate_answer
 from .repository import InMemoryRepository
-from .trace import normalize_trace_events
+from .trace import normalize_trace_events, redact_text
 
 
 class EvalKitService:
@@ -657,6 +657,7 @@ class EvalKitService:
             "not_evaluable_case_count": sum(
                 item.status == "not_evaluable" for item in results
             ),
+            "failed_case_count": sum(item.status == "failed" for item in results),
             "metrics": {
                 "recall_at_k": mean_metric([item.metrics.get("recall_at_k") for item in results]),
                 "mrr": mean_metric([item.metrics.get("mrr") for item in results]),
@@ -792,7 +793,7 @@ class EvalKitService:
                 eval_run_id=run.id,
                 case_id=case.id,
                 status="failed",
-                error=str(error),
+                error=redact_text(error),
             )
 
     @staticmethod

@@ -193,6 +193,58 @@ class AdapterRegistryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             registry.register("custom-http", MatchingAdapter())
 
+    def test_registry_explicit_replace_and_sorted_ids(self) -> None:
+        original = MatchingAdapter()
+        replacement = IncompleteAdapter()
+        registry = AdapterRegistry({"z-adapter": original})
+        registry.register("a-adapter", MatchingAdapter())
+        registry.register("z-adapter", replacement, replace=True)
+
+        self.assertEqual(("a-adapter", "z-adapter"), registry.list_ids())
+        self.assertIs(replacement, registry.resolve("z-adapter"))
+
+    def test_execute_api_rejects_run_bound_to_unknown_adapter(self) -> None:
+        service = EvalKitService(InMemoryRepository())
+        dataset = service.create_dataset("unknown adapter", "tester")
+        version = service.import_dataset_version(
+            dataset.id, [{"id": "case-1", "question": "policy"}], "tester"
+        )
+        config = service.create_config("top-1", 1)
+        run = service.create_eval_run(version.id, config.id, "missing-adapter")
+        router = create_router(service, AdapterRegistry())
+        execute = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/eval-runs/{run_id}/execute"
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            execute(run.id)
+
+        self.assertEqual(409, context.exception.status_code)
+        self.assertIn("missing-adapter", str(context.exception.detail))
+
+    def test_adapter_failure_is_redacted_in_result_trace_and_csv(self) -> None:
+        service = EvalKitService(InMemoryRepository())
+        dataset = service.create_dataset("failed adapter", "tester")
+        version = service.import_dataset_version(
+            dataset.id, [{"id": "case-1", "question": "policy"}], "tester"
+        )
+        config = service.create_config("top-1", 1)
+        run = service.create_eval_run(version.id, config.id, "failing")
+
+        summary = service.execute_eval_run(run.id, FailingAdapter())
+        result = service.list_case_results(run.id)[0]
+        trace = service.get_case_trace(run.id, "case-1")
+        exported = service.export_case_results_csv(run.id)
+
+        self.assertEqual(1, summary["failed_case_count"])
+        self.assertEqual("failed", result.status)
+        self.assertIn("token=[REDACTED]", result.error or "")
+        self.assertNotIn("secret-value", result.error or "")
+        self.assertNotIn("secret-value", exported)
+        self.assertNotIn("secret-value", str(trace))
+
     def test_execute_api_uses_adapter_id_bound_to_run(self) -> None:
         service = EvalKitService(InMemoryRepository())
         dataset = service.create_dataset("adapter test", "tester")

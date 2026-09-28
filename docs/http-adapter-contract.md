@@ -39,6 +39,8 @@ Configuration and response validation rules:
 - Consecutive failed calls open the circuit. Calls fail fast until the recovery window elapses;
   the first successful recovery call closes the circuit and resets the failure count.
 - Transport errors are classified as timeout, network, HTTP status, or circuit-open errors.
+- Failed cases expose a `failed_case_count`; stored result, Trace, and CSV error text is
+  credential-redacted and length-limited before it reaches an API response or export.
 - Bearer tokens and request IDs must not contain control characters used for header injection.
 - Configure either `bearer_token_env` or the legacy direct token argument, never both.
 - A returned `request_id` must match the request; omitted request IDs inherit the request value.
