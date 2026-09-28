@@ -20,6 +20,8 @@ class DashboardTests(unittest.TestCase):
 
         snapshot = build_dashboard_snapshot(service, run_id)
 
+        self.assertEqual("本地演示项目", snapshot["workspace"]["name"])
+        self.assertTrue(snapshot["workspace"]["is_demo"])
         self.assertEqual(6, snapshot["summary"]["completed_case_count"])
         self.assertEqual(0.6667, snapshot["summary"]["metrics"]["recall_at_k"])
         self.assertEqual(6, len(snapshot["results"]))
@@ -41,7 +43,15 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("/dashboard", routes)
         self.assertIn("/api/v1/dashboard/snapshot", routes)
         html_response = routes["/dashboard"].endpoint()
-        self.assertIn("AgentRAG EvalKit", html_response.body.decode("utf-8"))
+        html = html_response.body.decode("utf-8")
+        self.assertIn("AgentRAG EvalKit", html)
+        for navigation in ("概览", "Adapters", "数据集", "评测运行", "Badcase"):
+            self.assertIn(f">{navigation}<", html)
+        self.assertIn('data-page="overview"', html)
+        self.assertIn("尚未创建真实 Adapter", html)
+        self.assertIn("还没有用户导入的数据集", html)
+        self.assertIn("暂无用户创建的评测运行", html)
+        self.assertIn("工作台加载失败", html)
         snapshot = routes["/api/v1/dashboard/snapshot"].endpoint()
         self.assertEqual("succeeded", snapshot["summary"]["status"])
 

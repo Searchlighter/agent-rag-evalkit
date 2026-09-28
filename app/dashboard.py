@@ -122,6 +122,11 @@ def build_dashboard_snapshot(service: EvalKitService, run_id: str) -> dict[str, 
         reference_comparison = json.loads(_REFERENCE_REPORT.read_text(encoding="utf-8"))
 
     return {
+        "workspace": {
+            "name": "本地演示项目",
+            "storage": "in_memory",
+            "is_demo": True,
+        },
         "demo_notice": (
             "主评测明细使用脱敏合成数据与确定性 Mock Adapter；"
             "上方对比卡来自 Reference RAG 的 HTTP 端到端评测报告。"
