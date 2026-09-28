@@ -36,6 +36,18 @@
     .empty-state h3 { margin:0 0 7px; font-size:17px; }
     .empty-state p { max-width:480px; margin:0 auto; color:var(--muted); }
     .coming { display:inline-block; margin-top:16px; padding:5px 9px; color:#9cc5ed; background:#152a40; border-radius:999px; font-size:11px; }
+    .run-group { margin-bottom:22px; }
+    .run-group-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+    .run-group-head h3 { margin:0; font-size:15px; }
+    .run-list { display:grid; gap:10px; }
+    .run-card { padding:16px 18px; display:grid; grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(90px,.55fr)); gap:14px; align-items:center; }
+    .run-card-title { font-weight:750; margin-bottom:3px; }
+    .run-card-meta { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+    .run-stat span { display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.05em; }
+    .run-stat strong { display:block; margin-top:3px; }
+    .source-badge { display:inline-block; margin-right:7px; padding:2px 7px; border-radius:5px; font-size:10px; font-weight:800; }
+    .source-badge.user { color:#94f0cf; background:#11352c; }
+    .source-badge.demo { color:#ffd29f; background:#3a2819; }
     .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:18px; }
     .card,.panel { background:linear-gradient(160deg,rgba(18,35,54,.97),rgba(11,24,39,.97)); border:1px solid var(--line); border-radius:16px; box-shadow:0 18px 50px rgba(0,0,0,.18); }
     .metric { padding:18px; position:relative; overflow:hidden; }
@@ -79,6 +91,7 @@
     footer { display:flex; justify-content:space-between; gap:16px; margin-top:18px; color:var(--muted); font-size:12px; }
     footer a { color:#87baff; }
     @media (max-width:1100px) { .workspace{grid-template-columns:1fr}.sidebar{position:static;height:auto;padding:14px 18px}.brand{padding:0 4px 12px}.nav{display:flex;overflow:auto;margin-top:12px}.nav button{white-space:nowrap;width:auto}.sidebar-meta{display:none}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.comparison{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr} header{align-items:flex-start;flex-direction:column} }
+    @media (max-width:720px) { .run-card{grid-template-columns:1fr 1fr}.run-card>div:first-child{grid-column:1/-1} }
     @media (max-width:560px) { .shell{padding:16px}.metrics{grid-template-columns:1fr 1fr}.metric-value{font-size:24px}.table-wrap{overflow:auto}.page-title{align-items:flex-start;flex-direction:column}.nav-icon{display:none} }
   </style>
 </head>
@@ -122,13 +135,20 @@
     </section>
     <section class="page" data-page="runs" hidden>
       <div class="page-title"><div><h2>评测运行</h2><div class="subtitle">创建任务并跟踪真实评测状态</div></div></div>
-      <article class="panel empty-state"><div><div class="empty-state-icon">▷</div><h3>暂无用户创建的评测运行</h3><p>概览中的结果来自启动时生成的 Mock 演示，不属于用户运行。后续可在这里选择数据集与 Adapter 发起评测。</p><span class="coming">S2-08 / S2-09 即将实现</span></div></article>
+      <section class="run-group">
+        <div class="run-group-head"><h3>用户运行</h3><span class="pill" id="user-run-count">0 Runs</span></div>
+        <div class="run-list" id="user-runs"><article class="panel empty-state"><div><div class="empty-state-icon">▷</div><h3>暂无用户创建的评测运行</h3><p>后续可在这里选择数据集与 Adapter 发起评测。用户运行不会与下方 Mock 演示混合统计。</p><span class="coming">S2-08 / S2-09 即将实现</span></div></article></div>
+      </section>
+      <section class="run-group">
+        <div class="run-group-head"><h3>内置演示运行</h3><span class="source-badge demo">DEMO ONLY</span></div>
+        <div class="run-list" id="demo-run"></div>
+      </section>
     </section>
     <section class="page" data-page="badcases" hidden>
       <div class="page-title"><div><h2>Badcase</h2><div class="subtitle">集中查看失败样本与确定性诊断</div></div><span class="pill" id="badcase-count">0 Open</span></div>
       <article class="panel"><div id="badcases"><div class="empty">当前没有 Badcase</div></div></article>
     </section>
-    <footer><span>数据范围：脱敏合成数据 · 确定性 Mock Adapter</span><span><a href="/docs">OpenAPI</a> · <a href="/ready">Readiness</a></span></footer>
+    <footer><span>概览：脱敏合成 Demo · 用户运行独立展示</span><span><a href="/docs">OpenAPI</a> · <a href="/ready">Readiness</a></span></footer>
     </main>
   </div>
   <script>
@@ -147,6 +167,11 @@
     window.addEventListener('hashchange', () => switchPage(location.hash.slice(1), false));
     switchPage(location.hash.slice(1), false);
     function metric(label, value, note, color) { return `<div class="card metric" style="--accent:${color}"><div class="metric-label">${label}</div><div class="metric-value">${value}</div><div class="metric-note">${note}</div></div>`; }
+    function runCard(item, source) {
+      const isDemo = source === 'demo', label = isDemo ? 'DEMO' : 'USER';
+      const title = isDemo ? '内置 Mock 演示' : item.dataset_name;
+      return `<article class="panel run-card"><div><div class="run-card-title"><span class="source-badge ${source}">${label}</span>${esc(title)}</div><div class="run-card-meta">${esc(item.run_id)} · ${esc(item.adapter_id)}${item.model_id ? ` · ${esc(item.model_id)}` : ''}</div></div><div class="run-stat"><span>状态</span><strong>${esc(item.status)}</strong></div><div class="run-stat"><span>进度</span><strong>${item.completed_case_count}/${item.dataset_case_count}</strong></div><div class="run-stat"><span>Recall@K</span><strong>${pct(item.metrics.recall_at_k)}</strong></div></article>`;
+    }
     function showDetail(item) {
       document.querySelectorAll('tbody tr').forEach(row => row.classList.toggle('active', row.dataset.id === item.case_id));
       document.querySelector('#detail').innerHTML = `<div class="panel-head"><h2>Case 诊断</h2><span class="pill">${esc(item.case_id)}</span></div><h3>${esc(item.question)}</h3><div class="detail-row"><span class="detail-label">模型回答</span><div class="code">${esc(item.answer)}</div></div><div class="detail-row"><span class="detail-label">召回证据</span><div class="code">${esc(item.retrieval_ids.join(', ') || '无召回')}</div></div><div class="detail-row"><span class="detail-label">诊断结论</span><strong class="${item.metrics.recall_at_k === 0 ? 'fail' : 'pass'}">${esc(item.diagnosis.suggested_category)}</strong><div class="subtitle">${esc(item.diagnosis.suggestion)}</div></div>`;
@@ -157,7 +182,7 @@
         const s = data.summary, m = s.metrics;
         document.querySelector('#workspace-name').textContent = data.workspace.name;
         document.querySelector('#notice').innerHTML = `<span class="demo-badge">DEMO</span>${esc(data.demo_notice)}`;
-        document.querySelector('#run-status').textContent = `● ${s.status.toUpperCase()} · ${s.adapter_id}`;
+        document.querySelector('#run-status').textContent = `● DEMO · ${s.status.toUpperCase()} · ${s.adapter_id}`;
         document.querySelector('#metrics').innerHTML = metric('Recall@K',pct(m.recall_at_k),'期望证据召回比例','var(--cyan)') + metric('MRR',pct(m.mrr),'首个相关结果排名质量','var(--blue)') + metric('Citation Coverage',pct(m.citation_coverage),'回答引用覆盖比例','var(--orange)') + metric('Badcases',s.badcase_count,`${s.completed_case_count} 条 Case 已完成`,'var(--red)');
         if (data.reference_comparison) {
           const c=data.reference_comparison, b=c.baseline.summary.metrics, n=c.candidate.summary.metrics, d=c.delta;
@@ -171,6 +196,9 @@
         tbody.querySelectorAll('tr').forEach((row,index) => row.addEventListener('click',()=>showDetail(data.results[index])));
         document.querySelector('#badcase-count').textContent = `${data.badcases.length} Open`;
         document.querySelector('#badcases').innerHTML = data.badcases.length ? data.badcases.map(item=>`<div class="badcase"><div class="badcase-top"><span>${esc(item.category)}</span><span class="severity">${esc(item.severity)}</span></div><div class="subtitle">${esc(item.case_id)} · ${esc(item.note)}</div></div>`).join('') : '<div class="empty">当前没有 Badcase</div>';
+        document.querySelector('#user-run-count').textContent = `${data.user_runs.length} Runs`;
+        document.querySelector('#user-runs').innerHTML = data.user_runs.length ? data.user_runs.map(item=>runCard(item,'user')).join('') : '<article class="panel empty-state"><div><div class="empty-state-icon">▷</div><h3>暂无用户创建的评测运行</h3><p>后续可在这里选择数据集与 Adapter 发起评测。用户运行不会与下方 Mock 演示混合统计。</p><span class="coming">S2-08 / S2-09 即将实现</span></div></article>';
+        document.querySelector('#demo-run').innerHTML = runCard(data.demo.summary,'demo');
         if (data.results.length) showDetail(data.results.find(x=>x.metrics.recall_at_k===0) || data.results[0]);
       } catch (error) {
         document.querySelector('#run-status').textContent = '● 数据加载失败';

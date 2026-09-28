@@ -121,11 +121,35 @@ def build_dashboard_snapshot(service: EvalKitService, run_id: str) -> dict[str, 
     if _REFERENCE_REPORT.is_file():
         reference_comparison = json.loads(_REFERENCE_REPORT.read_text(encoding="utf-8"))
 
+    user_runs: list[dict[str, Any]] = []
+    for item in service.repository.eval_runs.values():
+        if item.id == run_id:
+            continue
+        item_summary = service.get_run_summary(item.id)
+        item_version = service.repository.dataset_versions[item.dataset_version_id]
+        item_dataset = service.repository.datasets[item_version.dataset_id]
+        user_runs.append({
+            "run_id": item.id,
+            "source": "user",
+            "is_demo": False,
+            "dataset_name": item_dataset.name,
+            "status": item_summary["status"],
+            "adapter_id": item_summary["adapter_id"],
+            "model_id": item_summary["model_id"],
+            "dataset_case_count": item_summary["dataset_case_count"],
+            "completed_case_count": item_summary["completed_case_count"],
+            "failed_case_count": item_summary["failed_case_count"],
+            "metrics": item_summary["metrics"],
+            "created_at": item.created_at.isoformat(),
+        })
+    user_runs.sort(key=lambda item: item["created_at"], reverse=True)
+
     return {
         "workspace": {
             "name": "本地演示项目",
             "storage": "in_memory",
             "is_demo": True,
+            "user_run_count": len(user_runs),
         },
         "demo_notice": (
             "主评测明细使用脱敏合成数据与确定性 Mock Adapter；"
@@ -135,6 +159,13 @@ def build_dashboard_snapshot(service: EvalKitService, run_id: str) -> dict[str, 
         "results": results,
         "badcases": [asdict(item) for item in service.list_badcases(eval_run_id=run_id)],
         "reference_comparison": reference_comparison,
+        "demo": {
+            "source": "demo",
+            "is_demo": True,
+            "label": "内置 Mock 演示",
+            "summary": summary,
+        },
+        "user_runs": user_runs,
     }
 
 

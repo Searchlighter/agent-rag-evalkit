@@ -22,6 +22,10 @@ class DashboardTests(unittest.TestCase):
 
         self.assertEqual("本地演示项目", snapshot["workspace"]["name"])
         self.assertTrue(snapshot["workspace"]["is_demo"])
+        self.assertEqual(0, snapshot["workspace"]["user_run_count"])
+        self.assertTrue(snapshot["demo"]["is_demo"])
+        self.assertEqual("demo", snapshot["demo"]["source"])
+        self.assertEqual([], snapshot["user_runs"])
         self.assertEqual(6, snapshot["summary"]["completed_case_count"])
         self.assertEqual(0.6667, snapshot["summary"]["metrics"]["recall_at_k"])
         self.assertEqual(6, len(snapshot["results"]))
@@ -35,6 +39,29 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(
             all(item["category"] == "wrong_retrieval" for item in snapshot["badcases"])
         )
+
+    def test_snapshot_separates_user_runs_from_built_in_demo(self) -> None:
+        service = EvalKitService(InMemoryRepository())
+        demo_run_id = bootstrap_dashboard_demo(service)
+        dataset = service.create_dataset("用户评测集", "user-1")
+        version = service.import_dataset_version(
+            dataset.id, [{"id": "user-case", "question": "真实问题"}], "user-1"
+        )
+        config = service.create_config("用户配置", 3)
+        user_run = service.create_eval_run(
+            version.id, config.id, "production-rag", model_id="release-1"
+        )
+
+        snapshot = build_dashboard_snapshot(service, demo_run_id)
+
+        self.assertEqual(1, snapshot["workspace"]["user_run_count"])
+        self.assertEqual(demo_run_id, snapshot["demo"]["summary"]["run_id"])
+        self.assertNotEqual(demo_run_id, snapshot["user_runs"][0]["run_id"])
+        self.assertEqual(user_run.id, snapshot["user_runs"][0]["run_id"])
+        self.assertEqual("user", snapshot["user_runs"][0]["source"])
+        self.assertFalse(snapshot["user_runs"][0]["is_demo"])
+        self.assertEqual("用户评测集", snapshot["user_runs"][0]["dataset_name"])
+        self.assertEqual("production-rag", snapshot["user_runs"][0]["adapter_id"])
 
     def test_application_exposes_dashboard_and_snapshot_routes(self) -> None:
         """应用应同时注册可视化页面及其只读数据接口。"""
@@ -51,6 +78,9 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("尚未创建真实 Adapter", html)
         self.assertIn("还没有用户导入的数据集", html)
         self.assertIn("暂无用户创建的评测运行", html)
+        self.assertIn("用户运行", html)
+        self.assertIn("内置演示运行", html)
+        self.assertIn("用户运行独立展示", html)
         self.assertIn("工作台加载失败", html)
         snapshot = routes["/api/v1/dashboard/snapshot"].endpoint()
         self.assertEqual("succeeded", snapshot["summary"]["status"])
