@@ -36,19 +36,32 @@ uvicorn app.mock_rag_service:app --host 127.0.0.1 --port 8001
 python -m scripts.demo_http_eval
 ```
 
-也可以指定目标地址或数据集：
+也可以选择 JSONL/CSV 数据集、目标地址、超时、重试次数和召回 K 值：
 
-```bash
-python -m scripts.demo_http_eval \
-  --endpoint http://127.0.0.1:8001/v1/query \
-  --dataset sample_data/enterprise_eval_cases.jsonl
+```powershell
+python -m scripts.demo_http_eval `
+  --endpoint http://127.0.0.1:8001/v1/query `
+  --dataset sample_data/enterprise_eval_cases.jsonl `
+  --timeout 5 `
+  --retries 1 `
+  --retrieval-k 2
+```
+
+目标服务需要 Bearer Token 时，只传环境变量名，不要把 Token 写进命令参数：
+
+```powershell
+$env:EVALKIT_HTTP_BEARER_TOKEN = "实际 Token"
+python -m scripts.demo_http_eval `
+  --endpoint https://agent.example.com/query `
+  --dataset D:\eval-data\cases.csv `
+  --bearer-token-env EVALKIT_HTTP_BEARER_TOKEN
 ```
 
 模拟服务的接口文档位于 <http://127.0.0.1:8001/docs>，健康检查位于 <http://127.0.0.1:8001/health>。
 
 ## 预期结果
 
-脚本输出 JSON，包括运行状态、聚合指标以及每条 Case 的回答、证据、指标和规则校验结果。默认合成数据应该全部执行成功；这些结果仅说明 Demo 契约和指标链路正确。
+脚本输出 JSON，包括本次选择的非敏感配置、运行状态、聚合指标以及每条 Case 的回答、证据、指标和规则校验结果。输出只记录是否启用鉴权，不包含 Token。默认合成数据应该全部执行成功；这些结果仅说明 Demo 契约和指标链路正确。
 
 ## 扩展示例
 

@@ -1,12 +1,13 @@
 from pathlib import Path
 import json
+import tempfile
 import unittest
 from unittest.mock import patch
 
 from app.http_adapter import HttpTargetAgentAdapter
 from app.ingestion import load_jsonl_cases
 from app.mock_rag_service import SYNTHETIC_CHUNKS, build_mock_response
-from scripts.demo_http_eval import run_demo
+from scripts.demo_http_eval import load_dataset, run_demo
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +66,54 @@ class P402DemoTests(unittest.TestCase):
         self.assertTrue(
             all(item["quality_checks"]["keyword_pass"] for item in output["results"])
         )
+
+    def test_http_demo_selects_csv_endpoint_and_environment_token(self) -> None:
+        captured_requests = []
+
+        def fake_urlopen(request, timeout):
+            captured_requests.append((request, timeout))
+            body = json.loads(request.data.decode("utf-8"))
+            return FakeResponse(build_mock_response(body["question"], body["request_id"]))
+
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "selected.csv"
+            dataset.write_text(
+                "id,question,expected_answers,expected_evidence,tags\n"
+                "csv-1,员工如何申请差旅报销？,提交报销单,expense-policy#travel,expense\n",
+                encoding="utf-8",
+            )
+            with (
+                patch.dict("app.http_adapter.environ", {"DEMO_TOKEN": "safe-secret"}),
+                patch("app.http_adapter.urlopen", side_effect=fake_urlopen),
+            ):
+                output = run_demo(
+                    "https://agent.example.test/query",
+                    dataset,
+                    bearer_token_env="DEMO_TOKEN",
+                    timeout_seconds=3,
+                    retries=0,
+                    retrieval_k=1,
+                )
+
+        request, timeout = captured_requests[0]
+        self.assertEqual("https://agent.example.test/query", request.full_url)
+        self.assertEqual("Bearer safe-secret", request.get_header("Authorization"))
+        self.assertEqual(3, timeout)
+        self.assertEqual(1, output["configuration"]["case_count"])
+        self.assertTrue(output["configuration"]["authenticated"])
+        self.assertNotIn("safe-secret", json.dumps(output, ensure_ascii=False))
+
+    def test_http_demo_rejects_missing_empty_or_unsupported_dataset(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            empty = root / "empty.jsonl"
+            empty.write_text("", encoding="utf-8")
+            unsupported = root / "cases.txt"
+            unsupported.write_text("question", encoding="utf-8")
+
+            for path in (root / "missing.jsonl", empty, unsupported):
+                with self.subTest(path=path), self.assertRaises(ValueError):
+                    load_dataset(path)
 
 
 if __name__ == "__main__":
