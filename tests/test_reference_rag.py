@@ -8,6 +8,8 @@ from pathlib import Path
 
 from app.http_adapter import HttpTargetAgentAdapter
 from app.reference_rag import ReferenceRagIndex, build_reference_response, create_reference_rag_app
+from scripts.compare_reference_rag import compare
+from tests.http_server import running_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,6 +78,24 @@ class ReferenceRagTests(unittest.TestCase):
         self.assertNotIn("run_id", serialized)
         self.assertNotIn("dataset_version_id", serialized)
         self.assertNotIn(str(ROOT), serialized)
+
+    def test_bm25_and_hybrid_are_compared_through_real_http(self) -> None:
+        """对比脚本应通过两个真实 HTTP 端点复现已记录指标。"""
+        dataset = ROOT / "sample_data" / "reference_eval_cases.jsonl"
+        with running_server(create_reference_rag_app()) as base_url:
+            report = compare(base_url, dataset)
+
+        baseline = report["baseline"]["summary"]
+        candidate = report["candidate"]["summary"]
+        self.assertEqual("succeeded", baseline["status"])
+        self.assertEqual("succeeded", candidate["status"])
+        self.assertEqual(24, baseline["completed_case_count"])
+        self.assertEqual(24, candidate["completed_case_count"])
+        self.assertEqual(0.9167, baseline["metrics"]["recall_at_k"])
+        self.assertEqual(1.0, candidate["metrics"]["recall_at_k"])
+        self.assertEqual(2, len(report["baseline"]["failures"]))
+        self.assertEqual([], report["candidate"]["failures"])
+        self.assertEqual(0.0833, report["delta"]["recall_at_k"])
 
 
 if __name__ == "__main__":

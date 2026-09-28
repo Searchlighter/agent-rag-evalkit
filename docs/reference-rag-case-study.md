@@ -72,6 +72,13 @@ python -m scripts.compare_reference_rag
 
 第二条命令会覆盖生成 `reports/reference-rag-comparison.json`。报告移除了随机 Run ID，确保相同代码与数据重复执行时内容稳定。
 
+也可以运行自动化真实 HTTP 对比测试。测试会选择随机空闲端口，结束后自动关闭服务，
+不会占用固定的 8002 端口：
+
+```powershell
+python -m unittest tests.test_reference_rag.ReferenceRagTests.test_bm25_and_hybrid_are_compared_through_real_http -v
+```
+
 ## 适用边界
 
 - 数据规模较小，不能证明大规模索引的性能和内存占用。
