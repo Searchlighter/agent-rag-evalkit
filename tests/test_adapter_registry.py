@@ -361,6 +361,16 @@ class AdapterRegistryTests(unittest.TestCase):
             for route in router.routes
             if route.path == "/api/v1/eval-runs/{run_id}/results"
         )
+        get_trace = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/eval-runs/{run_id}/cases/{case_id}/trace"
+        )
+        get_diagnosis = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/eval-runs/{run_id}/cases/{case_id}/diagnosis"
+        )
 
         run = create_run(
             CreateEvalRunRequest(
@@ -395,6 +405,14 @@ class AdapterRegistryTests(unittest.TestCase):
                     content="这是召回的原始 Chunk 文本。",
                 )
             ],
+            events=[
+                {
+                    "type": "retrieval",
+                    "node": "knowledge_search",
+                    "duration_ms": 12.5,
+                    "output": "命中 doc-a#chunk-1",
+                }
+            ],
         )
         with patch.object(HttpTargetAgentAdapter, "invoke", return_value=response):
             executed = execute_run(run["id"])
@@ -409,6 +427,13 @@ class AdapterRegistryTests(unittest.TestCase):
             "这是召回的原始 Chunk 文本。",
             case_result["retrieval_candidates"][0]["content"],
         )
+        trace = get_trace(run["id"], "case-1")
+        diagnosis = get_diagnosis(run["id"], "case-1")
+        self.assertEqual("retrieval", trace[0]["event_type"])
+        self.assertEqual("knowledge_search", trace[0]["node_name"])
+        self.assertEqual(12.5, trace[0]["duration_ms"])
+        self.assertEqual("needs_manual_review", diagnosis["suggested_category"])
+        self.assertEqual(1, diagnosis["trace_event_count"])
 
         registry.update_config("team-rag", enabled=False)
         with self.assertRaises(HTTPException) as context:

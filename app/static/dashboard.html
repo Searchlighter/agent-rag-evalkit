@@ -52,6 +52,14 @@
     .case-result-detail { padding:15px; border:1px solid var(--line); border-radius:12px; background:#091827; }
     .retrieval-item { margin-top:8px; padding:10px; border:1px solid #27435f; border-radius:9px; background:#0d1d2d; }
     .retrieval-head { display:flex; justify-content:space-between; gap:10px; color:#9cc5ed; font-size:11px; }
+    .trace-toggle { width:100%; display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
+    .trace-panel { margin-top:10px; padding:12px; border:1px solid #27435f; border-radius:10px; background:#081522; }
+    .trace-panel[hidden] { display:none; }
+    .diagnosis-card { padding:11px; border-left:3px solid var(--orange); background:#142131; border-radius:7px; }
+    .trace-list { display:grid; gap:8px; margin-top:12px; }
+    .trace-event { padding:10px; border:1px solid var(--line); border-radius:8px; background:#0d1d2d; }
+    .trace-event-head { display:flex; justify-content:space-between; gap:10px; color:#9cc5ed; font-size:11px; }
+    .trace-summary { margin-top:6px; color:#b9cce0; overflow-wrap:anywhere; }
     .citation-list { display:flex; gap:6px; flex-wrap:wrap; }
     .source-badge { display:inline-block; margin-right:7px; padding:2px 7px; border-radius:5px; font-size:10px; font-weight:800; }
     .source-badge.user { color:#94f0cf; background:#11352c; }
@@ -308,10 +316,47 @@
         runFeedback(`任务执行失败：${error.message}`, 'error');
       } finally { await loadRuns(); }
     }
-    function renderRunCaseDetail(item) {
+    function renderTraceAndDiagnosis(trace, diagnosis) {
+      const checks = Object.entries(diagnosis.quality_checks || {});
+      const events = trace.length ? trace.map(event => `<div class="trace-event"><div class="trace-event-head"><strong>#${event.sequence} · ${esc(event.event_type)} · ${esc(event.node_name)}</strong><span>${event.duration_ms == null ? '耗时未知' : `${Number(event.duration_ms).toFixed(1)} ms`}</span></div><div class="preview-evidence">${esc(event.source)}${event.source_event_type ? ` · 原始类型 ${esc(event.source_event_type)}` : ''}</div>${event.input_summary ? `<div class="trace-summary">输入：${esc(event.input_summary)}</div>` : ''}${event.output_summary ? `<div class="trace-summary">输出：${esc(event.output_summary)}</div>` : ''}${event.error_message ? `<div class="trace-summary error">错误：${esc(event.error_message)}</div>` : ''}</div>`).join('') : '<div class="empty">目标服务没有返回 Trace 事件</div>';
+      return `<div class="diagnosis-card"><div class="detail-label">确定性诊断</div><strong>${esc(diagnosis.suggested_category)}</strong><div class="subtitle">${esc(diagnosis.suggestion)}</div>${checks.length ? `<div class="citation-list">${checks.map(([name,value]) => `<span class="tag">${esc(name)}: ${esc(value)}</span>`).join('')}</div>` : ''}</div><div class="trace-list">${events}</div>`;
+    }
+    async function toggleCaseTrace(runId, caseId, button) {
+      const panel = document.querySelector('#case-trace-panel');
+      if (!panel) return;
+      if (button.getAttribute('aria-expanded') === 'true') {
+        button.setAttribute('aria-expanded', 'false');
+        button.querySelector('span:last-child').textContent = '展开';
+        panel.hidden = true;
+        return;
+      }
+      button.disabled = true;
+      button.querySelector('span:last-child').textContent = '加载中……';
+      try {
+        const prefix = `/api/v1/eval-runs/${encodeURIComponent(runId)}/cases/${encodeURIComponent(caseId)}`;
+        const [trace, diagnosis] = await Promise.all([api(`${prefix}/trace`), api(`${prefix}/diagnosis`)]);
+        if (!document.body.contains(button)) return;
+        panel.innerHTML = renderTraceAndDiagnosis(trace, diagnosis);
+        panel.hidden = false;
+        button.setAttribute('aria-expanded', 'true');
+        button.querySelector('span:last-child').textContent = '收起';
+      } catch (error) {
+        if (document.body.contains(button)) {
+          panel.innerHTML = `<div class="error">Trace 与诊断加载失败：${esc(error.message)}</div>`;
+          panel.hidden = false;
+          button.setAttribute('aria-expanded', 'true');
+          button.querySelector('span:last-child').textContent = '收起';
+        }
+      } finally {
+        if (document.body.contains(button)) button.disabled = false;
+      }
+    }
+    function renderRunCaseDetail(runId, item) {
       document.querySelectorAll('#run-case-results tr').forEach(row => row.classList.toggle('active', row.dataset.caseId === item.case_id));
       const retrievals = item.retrieval_candidates.length ? item.retrieval_candidates.map(candidate => `<div class="retrieval-item"><div class="retrieval-head"><strong>#${candidate.rank} · ${esc(candidate.evidence_id)}</strong><span>score ${Number(candidate.score).toFixed(4)}</span></div><div>${esc(candidate.content || candidate.metadata.title || '目标服务未返回 Chunk 文本')}</div><div class="preview-evidence">${esc(JSON.stringify(candidate.metadata))}</div></div>`).join('') : '<div class="empty">没有召回结果</div>';
-      document.querySelector('#run-case-detail').innerHTML = `<div class="panel-head"><h2>Case 详情</h2><span class="pill">${esc(item.status)}</span></div><div class="detail-row"><span class="detail-label">问题</span><strong>${esc(item.question)}</strong></div><div class="detail-row"><span class="detail-label">模型回答</span><div class="code">${esc(item.answer || '没有回答')}</div></div><div class="detail-row"><span class="detail-label">引用</span><div class="citation-list">${item.citations.length ? item.citations.map(value => `<span class="tag">${esc(value)}</span>`).join('') : '<span class="subtitle">无引用</span>'}</div></div><div class="detail-row"><span class="detail-label">召回内容</span>${retrievals}</div><div class="detail-row"><span class="detail-label">期望证据</span><div>${esc(item.expected_evidence.join(', ') || '未设置')}</div></div>${item.error ? `<div class="detail-row"><span class="detail-label">错误</span><div class="error">${esc(item.error)}</div></div>` : ''}`;
+      const detail = document.querySelector('#run-case-detail');
+      detail.innerHTML = `<div class="panel-head"><h2>Case 详情</h2><span class="pill">${esc(item.status)}</span></div><div class="detail-row"><span class="detail-label">问题</span><strong>${esc(item.question)}</strong></div><div class="detail-row"><span class="detail-label">模型回答</span><div class="code">${esc(item.answer || '没有回答')}</div></div><div class="detail-row"><span class="detail-label">引用</span><div class="citation-list">${item.citations.length ? item.citations.map(value => `<span class="tag">${esc(value)}</span>`).join('') : '<span class="subtitle">无引用</span>'}</div></div><div class="detail-row"><span class="detail-label">召回内容</span>${retrievals}</div><div class="detail-row"><span class="detail-label">期望证据</span><div>${esc(item.expected_evidence.join(', ') || '未设置')}</div></div>${item.error ? `<div class="detail-row"><span class="detail-label">错误</span><div class="error">${esc(item.error)}</div></div>` : ''}<button class="btn trace-toggle" id="case-trace-toggle" type="button" aria-expanded="false"><span>Trace 与诊断</span><span>展开</span></button><div class="trace-panel" id="case-trace-panel" hidden></div>`;
+      detail.querySelector('#case-trace-toggle').addEventListener('click', event => toggleCaseTrace(runId, item.case_id, event.currentTarget));
     }
     async function loadRunResults(runId) {
       const panel = document.querySelector('#run-results-panel');
@@ -322,8 +367,8 @@
         panel.innerHTML = `<div class="panel-head"><div><h2>逐 Case 结果</h2><div class="subtitle">${esc(runId)} · ${items.length} Cases</div></div><button class="btn" id="run-results-close" type="button">关闭</button></div>${items.length ? `<div class="case-result-layout"><div class="table-wrap"><table><thead><tr><th>问题</th><th>状态</th><th>Recall / MRR</th></tr></thead><tbody id="run-case-results">${items.map(item => `<tr data-case-id="${esc(item.case_id)}"><td><div class="question">${esc(item.question)}</div><div class="preview-evidence">${esc(item.case_id)}</div></td><td>${esc(item.status)}</td><td>${pct(item.metrics.recall_at_k)} / ${pct(item.metrics.mrr)}</td></tr>`).join('')}</tbody></table></div><div class="case-result-detail" id="run-case-detail"></div></div>` : '<div class="empty">该运行还没有 Case 结果。</div>'}`;
         panel.querySelector('#run-results-close').addEventListener('click', () => { panel.hidden = true; });
         if (items.length) {
-          panel.querySelectorAll('#run-case-results tr').forEach((row,index) => row.addEventListener('click', () => renderRunCaseDetail(items[index])));
-          renderRunCaseDetail(items[0]);
+          panel.querySelectorAll('#run-case-results tr').forEach((row,index) => row.addEventListener('click', () => renderRunCaseDetail(runId, items[index])));
+          renderRunCaseDetail(runId, items[0]);
         }
         panel.scrollIntoView({behavior:'smooth', block:'start'});
       } catch (error) {
