@@ -45,7 +45,14 @@
     .run-card-meta { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
     .run-stat span { display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.05em; }
     .run-stat strong { display:block; margin-top:3px; }
-    .run-actions { display:flex; justify-content:flex-end; }
+    .run-actions { display:flex; justify-content:flex-end; gap:7px; flex-wrap:wrap; }
+    .run-results-panel { margin-bottom:22px; }
+    .run-results-panel[hidden] { display:none; }
+    .case-result-layout { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(320px,.9fr); gap:16px; }
+    .case-result-detail { padding:15px; border:1px solid var(--line); border-radius:12px; background:#091827; }
+    .retrieval-item { margin-top:8px; padding:10px; border:1px solid #27435f; border-radius:9px; background:#0d1d2d; }
+    .retrieval-head { display:flex; justify-content:space-between; gap:10px; color:#9cc5ed; font-size:11px; }
+    .citation-list { display:flex; gap:6px; flex-wrap:wrap; }
     .source-badge { display:inline-block; margin-right:7px; padding:2px 7px; border-radius:5px; font-size:10px; font-weight:800; }
     .source-badge.user { color:#94f0cf; background:#11352c; }
     .source-badge.demo { color:#ffd29f; background:#3a2819; }
@@ -138,7 +145,7 @@
     .error { color:#ffc0c6; }
     footer { display:flex; justify-content:space-between; gap:16px; margin-top:18px; color:var(--muted); font-size:12px; }
     footer a { color:#87baff; }
-    @media (max-width:1100px) { .workspace{grid-template-columns:1fr}.sidebar{position:static;height:auto;padding:14px 18px}.brand{padding:0 4px 12px}.nav{display:flex;overflow:auto;margin-top:12px}.nav button{white-space:nowrap;width:auto}.sidebar-meta{display:none}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.comparison{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr} header{align-items:flex-start;flex-direction:column} }
+    @media (max-width:1100px) { .workspace{grid-template-columns:1fr}.sidebar{position:static;height:auto;padding:14px 18px}.brand{padding:0 4px 12px}.nav{display:flex;overflow:auto;margin-top:12px}.nav button{white-space:nowrap;width:auto}.sidebar-meta{display:none}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.comparison{grid-template-columns:1fr 1fr}.grid,.case-result-layout{grid-template-columns:1fr} header{align-items:flex-start;flex-direction:column} }
     @media (max-width:900px) { .form-grid,.connection-grid,.upload-grid,.run-create-grid{grid-template-columns:1fr 1fr}.button-row{grid-column:1/-1}.run-card{grid-template-columns:1fr 1fr}.run-card>div:first-child{grid-column:1/-1} }
     @media (max-width:620px) { .form-grid{grid-template-columns:1fr}.adapter-card{grid-template-columns:1fr}.button-row{grid-column:auto} }
     @media (max-width:560px) { .shell{padding:16px}.metrics{grid-template-columns:1fr 1fr}.metric-value{font-size:24px}.table-wrap{overflow:auto}.page-title{align-items:flex-start;flex-direction:column}.nav-icon{display:none} }
@@ -228,6 +235,7 @@
         </div>
         <div class="feedback" id="eval-run-feedback">任务创建后进入 queued 状态，不会自动执行。</div>
       </form>
+      <article class="panel run-results-panel" id="run-results-panel" hidden></article>
       <section class="run-group">
         <div class="run-group-head"><h3>用户运行</h3><span class="pill" id="user-run-count">0 Runs</span></div>
         <div class="run-list" id="user-runs"><article class="panel empty-state"><div><div class="empty-state-icon">▷</div><h3>暂无用户创建的评测运行</h3><p>使用上方表单选择数据集版本与 Adapter 创建任务。用户运行不会与下方 Mock 演示混合统计。</p></div></article></div>
@@ -263,7 +271,7 @@
     function runCard(item, source) {
       const isDemo = source === 'demo', label = isDemo ? 'DEMO' : 'USER';
       const title = isDemo ? '内置 Mock 演示' : item.dataset_name;
-      const action = !isDemo && item.status === 'queued' ? `<button class="btn primary" data-run-action="execute" data-run-id="${esc(item.run_id)}">执行评测</button>` : `<span class="subtitle">${item.status === 'running' ? '执行中' : '只读'}</span>`;
+      const action = !isDemo && item.status === 'queued' ? `<button class="btn primary" data-run-action="execute" data-run-id="${esc(item.run_id)}">执行评测</button>` : `${!isDemo && item.completed_case_count ? `<button class="btn" data-run-action="results" data-run-id="${esc(item.run_id)}">查看结果</button>` : ''}<span class="subtitle">${item.status === 'running' ? '执行中' : '只读'}</span>`;
       return `<article class="panel run-card"><div><div class="run-card-title"><span class="source-badge ${source}">${label}</span>${esc(title)}</div><div class="run-card-meta">${esc(item.run_id)} · v${item.dataset_version_number || 1} · ${esc(item.adapter_id)}${item.model_id ? ` · ${esc(item.model_id)}` : ''}</div></div><div class="run-stat"><span>状态</span><strong>${esc(item.status)}</strong></div><div class="run-stat"><span>进度 / 失败</span><strong>${item.completed_case_count}/${item.dataset_case_count} · ${item.failed_case_count}</strong></div><div class="run-stat"><span>Recall / MRR</span><strong>${pct(item.metrics.recall_at_k)} / ${pct(item.metrics.mrr)}</strong></div><div class="run-actions">${action}</div></article>`;
     }
     function renderRuns(items) {
@@ -273,7 +281,10 @@
       const userList = document.querySelector('#user-runs');
       userList.innerHTML = userRuns.length ? userRuns.map(item => runCard(item, 'user')).join('') : '<article class="panel empty-state"><div><div class="empty-state-icon">▷</div><h3>暂无用户创建的评测运行</h3><p>使用上方表单选择数据集版本与 Adapter 创建任务。用户运行不会与下方 Mock 演示混合统计。</p></div></article>';
       document.querySelector('#demo-run').innerHTML = demoRuns.length ? demoRuns.map(item => runCard(item, 'demo')).join('') : '<article class="panel empty-state"><div><p>内置演示运行不可用。</p></div></article>';
-      userList.querySelectorAll('[data-run-action="execute"]').forEach(button => button.addEventListener('click', () => executeRun(button.dataset.runId, button)));
+      userList.querySelectorAll('[data-run-action]').forEach(button => button.addEventListener('click', () => {
+        if (button.dataset.runAction === 'execute') executeRun(button.dataset.runId, button);
+        if (button.dataset.runAction === 'results') loadRunResults(button.dataset.runId);
+      }));
     }
     async function loadRuns(showFeedback=false) {
       const refresh = document.querySelector('#refresh-runs');
@@ -296,6 +307,28 @@
       } catch (error) {
         runFeedback(`任务执行失败：${error.message}`, 'error');
       } finally { await loadRuns(); }
+    }
+    function renderRunCaseDetail(item) {
+      document.querySelectorAll('#run-case-results tr').forEach(row => row.classList.toggle('active', row.dataset.caseId === item.case_id));
+      const retrievals = item.retrieval_candidates.length ? item.retrieval_candidates.map(candidate => `<div class="retrieval-item"><div class="retrieval-head"><strong>#${candidate.rank} · ${esc(candidate.evidence_id)}</strong><span>score ${Number(candidate.score).toFixed(4)}</span></div><div>${esc(candidate.content || candidate.metadata.title || '目标服务未返回 Chunk 文本')}</div><div class="preview-evidence">${esc(JSON.stringify(candidate.metadata))}</div></div>`).join('') : '<div class="empty">没有召回结果</div>';
+      document.querySelector('#run-case-detail').innerHTML = `<div class="panel-head"><h2>Case 详情</h2><span class="pill">${esc(item.status)}</span></div><div class="detail-row"><span class="detail-label">问题</span><strong>${esc(item.question)}</strong></div><div class="detail-row"><span class="detail-label">模型回答</span><div class="code">${esc(item.answer || '没有回答')}</div></div><div class="detail-row"><span class="detail-label">引用</span><div class="citation-list">${item.citations.length ? item.citations.map(value => `<span class="tag">${esc(value)}</span>`).join('') : '<span class="subtitle">无引用</span>'}</div></div><div class="detail-row"><span class="detail-label">召回内容</span>${retrievals}</div><div class="detail-row"><span class="detail-label">期望证据</span><div>${esc(item.expected_evidence.join(', ') || '未设置')}</div></div>${item.error ? `<div class="detail-row"><span class="detail-label">错误</span><div class="error">${esc(item.error)}</div></div>` : ''}`;
+    }
+    async function loadRunResults(runId) {
+      const panel = document.querySelector('#run-results-panel');
+      panel.hidden = false;
+      panel.innerHTML = '<div class="empty">正在加载逐 Case 结果……</div>';
+      try {
+        const items = await api(`/api/v1/eval-runs/${encodeURIComponent(runId)}/results`);
+        panel.innerHTML = `<div class="panel-head"><div><h2>逐 Case 结果</h2><div class="subtitle">${esc(runId)} · ${items.length} Cases</div></div><button class="btn" id="run-results-close" type="button">关闭</button></div>${items.length ? `<div class="case-result-layout"><div class="table-wrap"><table><thead><tr><th>问题</th><th>状态</th><th>Recall / MRR</th></tr></thead><tbody id="run-case-results">${items.map(item => `<tr data-case-id="${esc(item.case_id)}"><td><div class="question">${esc(item.question)}</div><div class="preview-evidence">${esc(item.case_id)}</div></td><td>${esc(item.status)}</td><td>${pct(item.metrics.recall_at_k)} / ${pct(item.metrics.mrr)}</td></tr>`).join('')}</tbody></table></div><div class="case-result-detail" id="run-case-detail"></div></div>` : '<div class="empty">该运行还没有 Case 结果。</div>'}`;
+        panel.querySelector('#run-results-close').addEventListener('click', () => { panel.hidden = true; });
+        if (items.length) {
+          panel.querySelectorAll('#run-case-results tr').forEach((row,index) => row.addEventListener('click', () => renderRunCaseDetail(items[index])));
+          renderRunCaseDetail(items[0]);
+        }
+        panel.scrollIntoView({behavior:'smooth', block:'start'});
+      } catch (error) {
+        panel.innerHTML = `<div class="error">结果加载失败：${esc(error.message)}</div>`;
+      }
     }
     let adapterItems = [], datasetItems = [], editingAdapterId = null, configuringAdapterId = null;
     async function api(url, options={}) {
@@ -568,7 +601,7 @@
     });
     document.querySelector('#refresh-runs').addEventListener('click', () => loadRuns(true));
     function showDetail(item) {
-      document.querySelectorAll('tbody tr').forEach(row => row.classList.toggle('active', row.dataset.id === item.case_id));
+      document.querySelectorAll('#results tr').forEach(row => row.classList.toggle('active', row.dataset.id === item.case_id));
       document.querySelector('#detail').innerHTML = `<div class="panel-head"><h2>Case 诊断</h2><span class="pill">${esc(item.case_id)}</span></div><h3>${esc(item.question)}</h3><div class="detail-row"><span class="detail-label">模型回答</span><div class="code">${esc(item.answer)}</div></div><div class="detail-row"><span class="detail-label">召回证据</span><div class="code">${esc(item.retrieval_ids.join(', ') || '无召回')}</div></div><div class="detail-row"><span class="detail-label">诊断结论</span><strong class="${item.metrics.recall_at_k === 0 ? 'fail' : 'pass'}">${esc(item.diagnosis.suggested_category)}</strong><div class="subtitle">${esc(item.diagnosis.suggestion)}</div></div>`;
     }
     async function load() {

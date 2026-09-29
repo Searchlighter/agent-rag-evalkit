@@ -105,10 +105,13 @@ class DifyChatAdapter:
                     chunk_id=str(chunk_id),
                     score=float(resource.get("score", 0)),
                     rank=int(resource.get("position") or rank),
+                    content=str(resource.get("content") or ""),
                     metadata={
                         key: value
                         for key, value in resource.items()
-                        if key not in {"document_id", "segment_id", "id", "score", "position"}
+                        if key not in {
+                            "document_id", "segment_id", "id", "score", "position", "content"
+                        }
                     },
                 )
             )

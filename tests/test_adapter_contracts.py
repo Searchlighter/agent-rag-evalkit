@@ -54,6 +54,7 @@ class AdapterContractTests(unittest.TestCase):
         self.assertEqual("http-request", response.request_id)
         self.assertEqual("expense-policy#travel", response.citations[0])
         self.assertEqual("synthetic", response.retrievals[0].metadata["source"])
+        self.assertIn("报销单", response.retrievals[0].content)
 
     def test_generic_http_contract_rejects_invalid_retrieval(self) -> None:
         with self.assertRaises(AdapterContractError):

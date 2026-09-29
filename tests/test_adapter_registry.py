@@ -356,6 +356,11 @@ class AdapterRegistryTests(unittest.TestCase):
             for route in router.routes
             if route.path == "/api/v1/eval-runs/{run_id}/execute"
         )
+        list_results = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/eval-runs/{run_id}/results"
+        )
 
         run = create_run(
             CreateEvalRunRequest(
@@ -379,14 +384,31 @@ class AdapterRegistryTests(unittest.TestCase):
         response = AdapterResponse(
             request_id="runtime-request",
             answer="测试回答",
-            citations=[],
-            retrievals=[],
+            citations=["doc-a#chunk-1"],
+            retrievals=[
+                RetrievedChunk(
+                    "chunk-1",
+                    "doc-a",
+                    0.95,
+                    1,
+                    {"title": "测试文档"},
+                    content="这是召回的原始 Chunk 文本。",
+                )
+            ],
         )
         with patch.object(HttpTargetAgentAdapter, "invoke", return_value=response):
             executed = execute_run(run["id"])
         self.assertEqual("succeeded", executed["status"])
         self.assertEqual(1, executed["completed_case_count"])
         self.assertEqual("succeeded", list_runs()[0]["status"])
+        case_result = list_results(run["id"])[0]
+        self.assertEqual("测试问题", case_result["question"])
+        self.assertEqual("测试回答", case_result["answer"])
+        self.assertEqual(["doc-a#chunk-1"], case_result["citations"])
+        self.assertEqual(
+            "这是召回的原始 Chunk 文本。",
+            case_result["retrieval_candidates"][0]["content"],
+        )
 
         registry.update_config("team-rag", enabled=False)
         with self.assertRaises(HTTPException) as context:

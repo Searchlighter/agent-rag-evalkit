@@ -15,6 +15,7 @@ class RetrievedChunk:
     score: float
     rank: int
     metadata: dict[str, Any] = field(default_factory=dict)
+    content: str = ""
 
 
 @dataclass(slots=True)

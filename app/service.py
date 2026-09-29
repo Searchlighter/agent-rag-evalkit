@@ -561,6 +561,23 @@ class EvalKitService:
         self._get_run(run_id)
         return self.repository.list_case_results(run_id)
 
+    def list_case_result_details(self, run_id: str) -> list[dict[str, Any]]:
+        """为结果页面组合样本输入、期望值和实际执行结果。"""
+        run = self._get_run(run_id)
+        version = self.repository.dataset_versions[run.dataset_version_id]
+        cases = {item.id: item for item in version.cases}
+        details: list[dict[str, Any]] = []
+        for result in self.repository.list_case_results(run_id):
+            case = cases[result.case_id]
+            details.append({
+                **asdict(result),
+                "question": case.question,
+                "expected_answers": list(case.expected_answers),
+                "expected_evidence": list(case.expected_evidence),
+                "tags": list(case.tags),
+            })
+        return details
+
     def export_case_results_csv(self, run_id: str) -> str:
         """将核心确定性指标输出为 UTF-8 CSV 文本。"""
         output = StringIO()
@@ -852,6 +869,7 @@ class EvalKitService:
                     "chunk_id": item.chunk_id,
                     "score": item.score,
                     "rank": item.rank,
+                    "content": item.content,
                     "metadata": item.metadata,
                 }
                 for item in response.retrievals

@@ -80,6 +80,7 @@ def build_mock_response(question: str, request_id: str, top_k: int = 2) -> dict[
             "chunk_id": chunk.chunk_id,
             "score": round(min(0.99, 0.65 + score * 0.08), 4),
             "rank": rank,
+            "content": chunk.content,
             "metadata": {"title": chunk.title, "source": "synthetic"},
         }
         for rank, (score, chunk) in enumerate(selected, start=1)

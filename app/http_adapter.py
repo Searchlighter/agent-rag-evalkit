@@ -252,12 +252,15 @@ class HttpTargetAgentAdapter:
             document_id = item.get("document_id")
             chunk_id = item.get("chunk_id")
             metadata = item.get("metadata", {})
+            content = item.get("content", "")
             if not isinstance(document_id, str) or not document_id.strip():
                 raise AdapterContractError("each retrieval requires a string document_id")
             if not isinstance(chunk_id, str) or not chunk_id.strip():
                 raise AdapterContractError("each retrieval requires document_id and chunk_id")
             if not isinstance(metadata, dict):
                 raise AdapterContractError("retrieval.metadata must be an object")
+            if not isinstance(content, str):
+                raise AdapterContractError("retrieval.content must be a string")
             try:
                 score = float(item.get("score", 0))
                 rank = int(item.get("rank", index))
@@ -274,6 +277,7 @@ class HttpTargetAgentAdapter:
                     score=score,
                     rank=rank,
                     metadata=dict(metadata),
+                    content=content,
                 )
             )
         if not all(isinstance(item, dict) for item in events):

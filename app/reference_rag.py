@@ -213,6 +213,7 @@ def build_reference_response(
                 "chunk_id": item["chunk_id"],
                 "score": item["score"],
                 "rank": item["rank"],
+                "content": item["content"],
                 "metadata": {
                     "title": item["title"],
                     "source": item["source"],

@@ -113,4 +113,5 @@ def _to_retrieved_chunk(raw: Any, rank: int) -> RetrievedChunk:
         score=float(raw.get("score", 0)),
         rank=int(raw.get("rank", rank)),
         metadata=dict(raw.get("metadata", {})),
+        content=str(raw.get("content") or ""),
     )

@@ -372,8 +372,7 @@ def create_router(
     def list_results(run_id: str) -> list[dict[str, Any]]:
         """列出运行中的逐样本结果。"""
         try:
-            service.get_run_summary(run_id)
-            return [asdict(item) for item in service.list_case_results(run_id)]
+            return service.list_case_result_details(run_id)
         except KeyError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
 

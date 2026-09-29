@@ -116,10 +116,13 @@ class RagFlowChatAdapter:
                     chunk_id=str(chunk["id"]),
                     score=float(chunk.get("similarity", 0)),
                     rank=rank,
+                    content=str(chunk.get("content") or chunk.get("content_with_weight") or ""),
                     metadata={
                         key: value
                         for key, value in chunk.items()
-                        if key not in {"document_id", "id", "similarity"}
+                        if key not in {
+                            "document_id", "id", "similarity", "content", "content_with_weight"
+                        }
                     },
                 )
             )
