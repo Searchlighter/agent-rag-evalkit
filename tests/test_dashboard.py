@@ -75,7 +75,9 @@ class DashboardTests(unittest.TestCase):
         for navigation in ("概览", "Adapters", "数据集", "评测运行", "Badcase"):
             self.assertIn(f">{navigation}<", html)
         self.assertIn('data-page="overview"', html)
-        self.assertIn("尚未创建真实 Adapter", html)
+        self.assertIn('id="adapter-form"', html)
+        self.assertIn("创建 Adapter", html)
+        self.assertIn("data-adapter-action", html)
         self.assertIn("还没有用户导入的数据集", html)
         self.assertIn("暂无用户创建的评测运行", html)
         self.assertIn("用户运行", html)

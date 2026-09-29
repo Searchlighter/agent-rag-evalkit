@@ -9,8 +9,13 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from .adapter_registry import AdapterNotFoundError, AdapterRegistry, create_default_registry
-from .domain import BadcaseSeverity, BadcaseStatus, EvalRunStatus, new_id
+from .adapter_registry import (
+    AdapterDisabledError,
+    AdapterNotFoundError,
+    AdapterRegistry,
+    create_default_registry,
+)
+from .domain import AdapterType, BadcaseSeverity, BadcaseStatus, EvalRunStatus, new_id
 from .service import EvalKitService
 
 
@@ -50,6 +55,23 @@ class TestAdapterRequest(BaseModel):
 
     adapter_id: str = Field(min_length=1)
     question: str = Field(default="EvalKit connection test", min_length=1, max_length=500)
+
+
+class CreateAdapterRequest(BaseModel):
+    """创建逻辑 Adapter 配置；连接参数在后续版本中单独维护。"""
+
+    adapter_id: str = Field(
+        min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    )
+    name: str = Field(min_length=1, max_length=100)
+    adapter_type: AdapterType = AdapterType.HTTP
+
+
+class UpdateAdapterRequest(BaseModel):
+    """编辑 Adapter 名称或启停状态。"""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    enabled: bool | None = None
 
 
 class ChangeRunStatusRequest(BaseModel):
@@ -96,6 +118,48 @@ def create_router(
     router = APIRouter(prefix="/api/v1")
     adapters = adapter_registry or create_default_registry()
 
+    @router.get("/adapters")
+    def list_adapters() -> list[dict[str, object]]:
+        """列出内置与用户创建的 Adapter，不返回任何密钥。"""
+        return adapters.list_configs()
+
+    @router.post("/adapters", status_code=201)
+    def create_adapter(request: CreateAdapterRequest) -> dict[str, object]:
+        """创建待配置的逻辑 Adapter。"""
+        try:
+            return adapters.create_config(
+                request.adapter_id, request.name, request.adapter_type
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+    @router.patch("/adapters/{adapter_id}")
+    def update_adapter(
+        adapter_id: str, request: UpdateAdapterRequest
+    ) -> dict[str, object]:
+        """更新 Adapter 名称或启停状态。"""
+        if request.name is None and request.enabled is None:
+            raise HTTPException(status_code=400, detail="至少提供一个需要更新的字段")
+        try:
+            return adapters.update_config(
+                adapter_id, name=request.name, enabled=request.enabled
+            )
+        except AdapterNotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
+    @router.delete("/adapters/{adapter_id}")
+    def delete_adapter(adapter_id: str) -> dict[str, object]:
+        """删除 Adapter 配置以及可能存在的运行时绑定。"""
+        try:
+            deleted = adapters.delete_config(adapter_id)
+        except AdapterNotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return {"status": "deleted", "adapter": deleted}
+
     @router.post("/adapters/test")
     def test_adapter_connection(request: TestAdapterRequest) -> dict[str, Any]:
         """验证 Adapter 可调用，并返回不含回答正文的契约摘要。"""
@@ -103,7 +167,7 @@ def create_router(
         try:
             adapter = adapters.resolve(request.adapter_id)
             response = adapter.invoke(request.question, request_id=request_id)
-        except AdapterNotFoundError as error:
+        except (AdapterNotFoundError, AdapterDisabledError) as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
         except Exception as error:
             raise HTTPException(
@@ -188,7 +252,7 @@ def create_router(
             return service.execute_eval_run(run_id, adapter=adapter)
         except KeyError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
-        except AdapterNotFoundError as error:
+        except (AdapterNotFoundError, AdapterDisabledError) as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error

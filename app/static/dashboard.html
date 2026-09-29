@@ -48,6 +48,25 @@
     .source-badge { display:inline-block; margin-right:7px; padding:2px 7px; border-radius:5px; font-size:10px; font-weight:800; }
     .source-badge.user { color:#94f0cf; background:#11352c; }
     .source-badge.demo { color:#ffd29f; background:#3a2819; }
+    .form-panel { padding:18px; margin-bottom:14px; }
+    .form-grid { display:grid; grid-template-columns:1fr 1.4fr .8fr auto; gap:12px; align-items:end; }
+    .field label { display:block; margin-bottom:5px; color:var(--muted); font-size:11px; font-weight:700; }
+    .field input,.field select { width:100%; min-height:40px; padding:8px 10px; border:1px solid var(--line); border-radius:9px; color:var(--text); background:#091827; font:inherit; }
+    .field input:focus,.field select:focus { outline:2px solid rgba(77,226,197,.28); border-color:var(--cyan); }
+    .button-row,.adapter-actions { display:flex; gap:7px; flex-wrap:wrap; }
+    .btn { min-height:38px; padding:7px 12px; border:1px solid var(--line); border-radius:9px; color:var(--text); background:#14283e; font:inherit; cursor:pointer; }
+    .btn:hover { border-color:#41658a; }
+    .btn.primary { color:#042019; background:var(--cyan); border-color:var(--cyan); font-weight:800; }
+    .btn.danger { color:#ffc0c6; background:#301923; border-color:#5a2d3c; }
+    .btn:disabled { opacity:.45; cursor:not-allowed; }
+    .feedback { min-height:20px; margin:8px 2px 0; color:var(--muted); font-size:12px; }
+    .feedback.success { color:#8ff0bc; } .feedback.error { color:#ffc0c6; }
+    .adapter-list { display:grid; gap:10px; }
+    .adapter-card { padding:16px 18px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; }
+    .adapter-title { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-weight:800; }
+    .adapter-meta { color:var(--muted); font-size:12px; }
+    .state-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
+    .state-dot.on { background:var(--cyan); box-shadow:0 0 12px rgba(77,226,197,.5); }
     .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:18px; }
     .card,.panel { background:linear-gradient(160deg,rgba(18,35,54,.97),rgba(11,24,39,.97)); border:1px solid var(--line); border-radius:16px; box-shadow:0 18px 50px rgba(0,0,0,.18); }
     .metric { padding:18px; position:relative; overflow:hidden; }
@@ -91,7 +110,8 @@
     footer { display:flex; justify-content:space-between; gap:16px; margin-top:18px; color:var(--muted); font-size:12px; }
     footer a { color:#87baff; }
     @media (max-width:1100px) { .workspace{grid-template-columns:1fr}.sidebar{position:static;height:auto;padding:14px 18px}.brand{padding:0 4px 12px}.nav{display:flex;overflow:auto;margin-top:12px}.nav button{white-space:nowrap;width:auto}.sidebar-meta{display:none}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.comparison{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr} header{align-items:flex-start;flex-direction:column} }
-    @media (max-width:720px) { .run-card{grid-template-columns:1fr 1fr}.run-card>div:first-child{grid-column:1/-1} }
+    @media (max-width:900px) { .form-grid{grid-template-columns:1fr 1fr}.button-row{grid-column:1/-1}.run-card{grid-template-columns:1fr 1fr}.run-card>div:first-child{grid-column:1/-1} }
+    @media (max-width:620px) { .form-grid{grid-template-columns:1fr}.adapter-card{grid-template-columns:1fr}.button-row{grid-column:auto} }
     @media (max-width:560px) { .shell{padding:16px}.metrics{grid-template-columns:1fr 1fr}.metric-value{font-size:24px}.table-wrap{overflow:auto}.page-title{align-items:flex-start;flex-direction:column}.nav-icon{display:none} }
   </style>
 </head>
@@ -126,8 +146,17 @@
       </section>
     </section>
     <section class="page" data-page="adapters" hidden>
-      <div class="page-title"><div><h2>Adapters</h2><div class="subtitle">管理需要评测的 Agent 与 RAG 服务</div></div></div>
-      <article class="panel empty-state"><div><div class="empty-state-icon">↗</div><h3>尚未创建真实 Adapter</h3><p>后续任务将在这里提供 HTTP 地址、鉴权、超时配置和连接测试。当前概览仅使用明确标识的演示 Adapter。</p><span class="coming">S2-03 / S2-04 即将实现</span></div></article>
+      <div class="page-title"><div><h2>Adapters</h2><div class="subtitle">管理需要评测的 Agent 与 RAG 服务</div></div><span class="pill" id="adapter-count">0 Adapters</span></div>
+      <form class="panel form-panel" id="adapter-form">
+        <div class="form-grid">
+          <div class="field"><label for="adapter-id">Adapter ID</label><input id="adapter-id" name="adapter_id" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._-]*" placeholder="例如 hr-rag" required></div>
+          <div class="field"><label for="adapter-name">显示名称</label><input id="adapter-name" name="name" maxlength="100" placeholder="例如 HR 知识库" required></div>
+          <div class="field"><label for="adapter-type">类型</label><select id="adapter-type" name="adapter_type"><option value="http">HTTP</option><option value="dify">Dify</option><option value="ragflow">RAGFlow</option><option value="langgraph">LangGraph</option></select></div>
+          <div class="button-row"><button class="btn primary" id="adapter-submit" type="submit">创建 Adapter</button><button class="btn" id="adapter-cancel" type="button" hidden>取消编辑</button></div>
+        </div>
+        <div class="feedback" id="adapter-feedback">创建后显示为“待配置”，下一步再填写连接参数。</div>
+      </form>
+      <div class="adapter-list" id="adapter-list"><article class="panel empty-state"><div><div class="empty-state-icon">↗</div><h3>正在加载 Adapter</h3></div></article></div>
     </section>
     <section class="page" data-page="datasets" hidden>
       <div class="page-title"><div><h2>数据集</h2><div class="subtitle">导入、校验和预览版本化评测样本</div></div></div>
@@ -172,6 +201,88 @@
       const title = isDemo ? '内置 Mock 演示' : item.dataset_name;
       return `<article class="panel run-card"><div><div class="run-card-title"><span class="source-badge ${source}">${label}</span>${esc(title)}</div><div class="run-card-meta">${esc(item.run_id)} · ${esc(item.adapter_id)}${item.model_id ? ` · ${esc(item.model_id)}` : ''}</div></div><div class="run-stat"><span>状态</span><strong>${esc(item.status)}</strong></div><div class="run-stat"><span>进度</span><strong>${item.completed_case_count}/${item.dataset_case_count}</strong></div><div class="run-stat"><span>Recall@K</span><strong>${pct(item.metrics.recall_at_k)}</strong></div></article>`;
     }
+    let adapterItems = [], editingAdapterId = null;
+    async function api(url, options={}) {
+      const response = await fetch(url, {headers:{'Content-Type':'application/json'}, ...options});
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail || data);
+        throw new Error(detail || `HTTP ${response.status}`);
+      }
+      return data;
+    }
+    function adapterFeedback(message, state='') {
+      const element = document.querySelector('#adapter-feedback');
+      element.textContent = message;
+      element.className = `feedback ${state}`;
+    }
+    function resetAdapterForm() {
+      editingAdapterId = null;
+      document.querySelector('#adapter-form').reset();
+      document.querySelector('#adapter-id').disabled = false;
+      document.querySelector('#adapter-type').disabled = false;
+      document.querySelector('#adapter-submit').textContent = '创建 Adapter';
+      document.querySelector('#adapter-cancel').hidden = true;
+      adapterFeedback('创建后显示为“待配置”，下一步再填写连接参数。');
+    }
+    function renderAdapters() {
+      document.querySelector('#adapter-count').textContent = `${adapterItems.length} Adapters`;
+      const list = document.querySelector('#adapter-list');
+      if (!adapterItems.length) {
+        list.innerHTML = '<article class="panel empty-state"><div><div class="empty-state-icon">↗</div><h3>尚未创建 Adapter</h3><p>使用上方表单创建第一个逻辑配置。</p></div></article>';
+        return;
+      }
+      list.innerHTML = adapterItems.map(item => `<article class="panel adapter-card"><div><div class="adapter-title"><span class="state-dot ${item.enabled ? 'on' : ''}"></span>${esc(item.name)}${item.system ? '<span class="source-badge demo">SYSTEM</span>' : '<span class="source-badge user">USER</span>'}</div><div class="adapter-meta">${esc(item.id)} · ${esc(item.adapter_type.toUpperCase())} · ${item.configured ? '已配置运行时' : '待配置连接参数'} · ${item.enabled ? '已启用' : '已停用'}</div></div><div class="adapter-actions"><button class="btn" data-adapter-action="edit" data-id="${esc(item.id)}">编辑</button><button class="btn" data-adapter-action="toggle" data-id="${esc(item.id)}">${item.enabled ? '停用' : '启用'}</button><button class="btn danger" data-adapter-action="delete" data-id="${esc(item.id)}" ${item.system ? 'disabled title="系统预配置项不可删除"' : ''}>删除</button></div></article>`).join('');
+      list.querySelectorAll('[data-adapter-action]').forEach(button => button.addEventListener('click', () => handleAdapterAction(button.dataset.adapterAction, button.dataset.id)));
+    }
+    async function loadAdapters() {
+      try {
+        adapterItems = await api('/api/v1/adapters');
+        renderAdapters();
+      } catch (error) {
+        document.querySelector('#adapter-list').innerHTML = `<article class="panel empty-state"><div><div class="empty-state-icon">!</div><h3>Adapter 加载失败</h3><p>${esc(error.message)}</p></div></article>`;
+      }
+    }
+    async function handleAdapterAction(action, id) {
+      const item = adapterItems.find(candidate => candidate.id === id);
+      if (!item) return;
+      if (action === 'edit') {
+        editingAdapterId = id;
+        document.querySelector('#adapter-id').value = item.id;
+        document.querySelector('#adapter-name').value = item.name;
+        document.querySelector('#adapter-type').value = item.adapter_type;
+        document.querySelector('#adapter-id').disabled = true;
+        document.querySelector('#adapter-type').disabled = true;
+        document.querySelector('#adapter-submit').textContent = '保存修改';
+        document.querySelector('#adapter-cancel').hidden = false;
+        adapterFeedback(`正在编辑 ${item.id}`);
+        document.querySelector('#adapter-name').focus();
+        return;
+      }
+      if (action === 'delete' && !confirm(`确认删除 Adapter“${item.name}”吗？`)) return;
+      try {
+        if (action === 'toggle') await api(`/api/v1/adapters/${encodeURIComponent(id)}`, {method:'PATCH', body:JSON.stringify({enabled:!item.enabled})});
+        if (action === 'delete') await api(`/api/v1/adapters/${encodeURIComponent(id)}`, {method:'DELETE'});
+        adapterFeedback(action === 'delete' ? 'Adapter 已删除。' : 'Adapter 状态已更新。', 'success');
+        await loadAdapters();
+      } catch (error) { adapterFeedback(`操作失败：${error.message}`, 'error'); }
+    }
+    document.querySelector('#adapter-cancel').addEventListener('click', resetAdapterForm);
+    document.querySelector('#adapter-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      try {
+        if (editingAdapterId) {
+          await api(`/api/v1/adapters/${encodeURIComponent(editingAdapterId)}`, {method:'PATCH', body:JSON.stringify({name:form.get('name')})});
+        } else {
+          await api('/api/v1/adapters', {method:'POST', body:JSON.stringify({adapter_id:form.get('adapter_id'),name:form.get('name'),adapter_type:form.get('adapter_type')})});
+        }
+        const message = editingAdapterId ? 'Adapter 已更新。' : 'Adapter 已创建，当前等待连接配置。';
+        resetAdapterForm();
+        adapterFeedback(message, 'success');
+        await loadAdapters();
+      } catch (error) { adapterFeedback(`保存失败：${error.message}`, 'error'); }
+    });
     function showDetail(item) {
       document.querySelectorAll('tbody tr').forEach(row => row.classList.toggle('active', row.dataset.id === item.case_id));
       document.querySelector('#detail').innerHTML = `<div class="panel-head"><h2>Case 诊断</h2><span class="pill">${esc(item.case_id)}</span></div><h3>${esc(item.question)}</h3><div class="detail-row"><span class="detail-label">模型回答</span><div class="code">${esc(item.answer)}</div></div><div class="detail-row"><span class="detail-label">召回证据</span><div class="code">${esc(item.retrieval_ids.join(', ') || '无召回')}</div></div><div class="detail-row"><span class="detail-label">诊断结论</span><strong class="${item.metrics.recall_at_k === 0 ? 'fail' : 'pass'}">${esc(item.diagnosis.suggested_category)}</strong><div class="subtitle">${esc(item.diagnosis.suggestion)}</div></div>`;
@@ -207,6 +318,7 @@
       }
     }
     load();
+    loadAdapters();
   </script>
 </body>
 </html>

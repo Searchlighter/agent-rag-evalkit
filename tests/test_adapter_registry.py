@@ -7,8 +7,13 @@ import unittest
 from fastapi import HTTPException
 
 from app.adapter_contract import AdapterResponse, RetrievedChunk
-from app.adapter_registry import AdapterNotFoundError, AdapterRegistry
-from app.api import TestAdapterRequest, create_router
+from app.adapter_registry import AdapterDisabledError, AdapterNotFoundError, AdapterRegistry
+from app.api import (
+    CreateAdapterRequest,
+    TestAdapterRequest,
+    UpdateAdapterRequest,
+    create_router,
+)
 from app.domain import AdapterConfig, AdapterType, AdapterVersion
 from app.repository import InMemoryRepository
 from app.service import EvalKitService
@@ -202,6 +207,52 @@ class AdapterRegistryTests(unittest.TestCase):
 
         self.assertEqual(("a-adapter", "z-adapter"), registry.list_ids())
         self.assertIs(replacement, registry.resolve("z-adapter"))
+
+    def test_adapter_management_api_creates_edits_toggles_and_deletes(self) -> None:
+        registry = AdapterRegistry({"runtime-http": MatchingAdapter()})
+        router = create_router(EvalKitService(InMemoryRepository()), registry)
+
+        def endpoint(path: str, method: str):
+            return next(
+                route.endpoint
+                for route in router.routes
+                if route.path == path and method in route.methods
+            )
+
+        create = endpoint("/api/v1/adapters", "POST")
+        list_all = endpoint("/api/v1/adapters", "GET")
+        update = endpoint("/api/v1/adapters/{adapter_id}", "PATCH")
+        delete = endpoint("/api/v1/adapters/{adapter_id}", "DELETE")
+
+        created = create(
+            CreateAdapterRequest(
+                adapter_id="team-rag", name="团队知识库", adapter_type="http"
+            )
+        )
+        self.assertFalse(created["configured"])
+        self.assertEqual(["runtime-http", "team-rag"], [item["id"] for item in list_all()])
+
+        renamed = update(
+            "team-rag", UpdateAdapterRequest(name="团队知识库 V2", enabled=False)
+        )
+        self.assertEqual("团队知识库 V2", renamed["name"])
+        self.assertFalse(renamed["enabled"])
+
+        registry.update_config("runtime-http", enabled=False)
+        with self.assertRaises(AdapterDisabledError):
+            registry.resolve("runtime-http")
+
+        deleted = delete("team-rag")
+        self.assertEqual("deleted", deleted["status"])
+        self.assertEqual(["runtime-http"], [item["id"] for item in list_all()])
+
+        with self.assertRaises(HTTPException) as duplicate:
+            create(
+                CreateAdapterRequest(
+                    adapter_id="runtime-http", name="重复配置", adapter_type="http"
+                )
+            )
+        self.assertEqual(409, duplicate.exception.status_code)
 
     def test_execute_api_rejects_run_bound_to_unknown_adapter(self) -> None:
         service = EvalKitService(InMemoryRepository())
