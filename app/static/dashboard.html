@@ -77,6 +77,17 @@
     .validation-item { padding:10px 12px; border-radius:9px; background:#351d28; }
     .validation-item strong { color:#ff9ba5; }
     .validation-location { display:inline-block; margin-right:8px; color:#ffd0d5; font-weight:800; }
+    .dataset-list { display:grid; gap:10px; margin-top:14px; }
+    .dataset-card { padding:17px 18px; }
+    .dataset-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+    .version-list { display:flex; gap:8px; flex-wrap:wrap; margin-top:13px; }
+    .version-button { text-align:left; }
+    .dataset-preview { margin-top:14px; }
+    .dataset-preview[hidden] { display:none; }
+    .dataset-preview th:first-child { width:18%; }
+    .dataset-preview th:nth-child(2) { width:44%; }
+    .preview-question { font-weight:700; }
+    .preview-evidence { color:var(--muted); font-size:11px; }
     .adapter-list { display:grid; gap:10px; }
     .adapter-card { padding:16px 18px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; }
     .adapter-title { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-weight:800; }
@@ -188,7 +199,7 @@
       <div class="adapter-list" id="adapter-list"><article class="panel empty-state"><div><div class="empty-state-icon">↗</div><h3>正在加载 Adapter</h3></div></article></div>
     </section>
     <section class="page" data-page="datasets" hidden>
-      <div class="page-title"><div><h2>数据集</h2><div class="subtitle">导入、校验和预览版本化评测样本</div></div></div>
+      <div class="page-title"><div><h2>数据集</h2><div class="subtitle">导入、校验和预览版本化评测样本</div></div><span class="pill" id="dataset-count">0 Datasets</span></div>
       <form class="panel form-panel" id="dataset-upload-form">
         <div class="upload-grid">
           <div class="field"><label for="dataset-name">数据集名称</label><input id="dataset-name" name="name" maxlength="100" placeholder="例如 客服知识库回归集" required></div>
@@ -200,7 +211,8 @@
       </form>
       <article class="panel validation-errors" id="dataset-validation-errors" hidden></article>
       <article class="panel upload-result" id="dataset-upload-result" hidden></article>
-      <article class="panel empty-state" id="dataset-empty-state"><div><div class="empty-state-icon">▤</div><h3>还没有用户导入的数据集</h3><p>选择 UTF-8 编码的 JSONL 或 CSV 文件开始创建评测集。</p><span class="coming">版本列表与样本预览将在 S2-07 实现</span></div></article>
+      <div class="dataset-list" id="dataset-list"><article class="panel empty-state"><div><div class="empty-state-icon">▤</div><h3>正在加载数据集</h3></div></article></div>
+      <article class="panel dataset-preview" id="dataset-preview" hidden></article>
     </section>
     <section class="page" data-page="runs" hidden>
       <div class="page-title"><div><h2>评测运行</h2><div class="subtitle">创建任务并跟踪真实评测状态</div></div></div>
@@ -392,6 +404,40 @@
       element.textContent = message;
       element.className = `feedback ${state}`;
     }
+    function renderDatasets(items) {
+      document.querySelector('#dataset-count').textContent = `${items.length} Datasets`;
+      const list = document.querySelector('#dataset-list');
+      if (!items.length) {
+        list.innerHTML = '<article class="panel empty-state"><div><div class="empty-state-icon">▤</div><h3>还没有用户导入的数据集</h3><p>选择 UTF-8 编码的 JSONL 或 CSV 文件开始创建评测集。</p></div></article>';
+        return;
+      }
+      list.innerHTML = items.map(item => {
+        const isDemo = item.owner_id === 'dashboard-demo';
+        const versions = item.versions.map(version => `<button class="btn version-button" data-dataset-id="${esc(item.id)}" data-version-id="${esc(version.id)}"><strong>v${version.version_number}</strong> · ${version.case_count} Cases<br><span class="preview-evidence">${esc(version.checksum.slice(0,12))}…</span></button>`).join('');
+        return `<article class="panel dataset-card"><div class="dataset-card-head"><div><div class="adapter-title">${esc(item.name)}<span class="source-badge ${isDemo ? 'demo' : 'user'}">${isDemo ? 'DEMO' : 'USER'}</span></div><div class="adapter-meta">${esc(item.id)} · ${item.version_count} 个版本 · Owner ${esc(item.owner_id)}</div></div><span class="pill">${item.current_version_id ? '已就绪' : '无版本'}</span></div><div class="version-list">${versions || '<span class="subtitle">尚无可预览版本</span>'}</div></article>`;
+      }).join('');
+      list.querySelectorAll('[data-version-id]').forEach(button => button.addEventListener('click', () => loadDatasetPreview(button.dataset.datasetId, button.dataset.versionId)));
+    }
+    async function loadDatasets() {
+      try {
+        renderDatasets(await api('/api/v1/datasets'));
+      } catch (error) {
+        document.querySelector('#dataset-list').innerHTML = `<article class="panel empty-state"><div><div class="empty-state-icon">!</div><h3>数据集加载失败</h3><p>${esc(error.message)}</p></div></article>`;
+      }
+    }
+    async function loadDatasetPreview(datasetId, versionId) {
+      const panel = document.querySelector('#dataset-preview');
+      panel.hidden = false;
+      panel.innerHTML = '<div class="empty">正在加载样本预览……</div>';
+      try {
+        const data = await api(`/api/v1/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(versionId)}/cases?limit=20`);
+        panel.innerHTML = `<div class="panel-head"><div><h2>v${data.version_number} 样本预览</h2><div class="subtitle">显示 ${data.cases.length} / ${data.total} Cases</div></div><button class="btn" id="dataset-preview-close" type="button">关闭</button></div><div class="table-wrap"><table><thead><tr><th>Case ID</th><th>问题</th><th>期望证据 / 标签</th></tr></thead><tbody>${data.cases.map(item => `<tr><td>${esc(item.id)}</td><td><div class="preview-question">${esc(item.question)}</div><div class="preview-evidence">期望答案：${esc(item.expected_answers.join('；') || '未设置')}</div></td><td><div>${esc(item.expected_evidence.join(', ') || '未设置')}</div><div class="preview-evidence">${esc(item.tags.join(' · ') || '无标签')}</div></td></tr>`).join('')}</tbody></table></div>`;
+        panel.querySelector('#dataset-preview-close').addEventListener('click', () => { panel.hidden = true; });
+        panel.scrollIntoView({behavior:'smooth', block:'start'});
+      } catch (error) {
+        panel.innerHTML = `<div class="error">样本预览加载失败：${esc(error.message)}</div>`;
+      }
+    }
     function clearDatasetValidationErrors() {
       const panel = document.querySelector('#dataset-validation-errors');
       panel.hidden = true;
@@ -433,6 +479,7 @@
         card.innerHTML = `<div class="panel-head"><h2>上传成功</h2><span class="source-badge user">USER</span></div><div class="adapter-title">${esc(dataset.name)}</div><div class="adapter-meta">${esc(result.source.filename)} · v${version.version_number} · ${version.case_count} Cases · SHA-256 ${esc(version.checksum.slice(0,12))}…</div>`;
         datasetFeedback(`已创建 ${version.case_count} 条样本的数据集版本。`, 'success');
         event.currentTarget.reset();
+        await loadDatasets();
       } catch (error) {
         const issues = error.validationIssues || (error.detail && error.detail.issues);
         datasetFeedback(`上传失败：${issues ? '数据集格式校验未通过。' : error.message}`, 'error');
@@ -475,6 +522,7 @@
     }
     load();
     loadAdapters();
+    loadDatasets();
   </script>
 </body>
 </html>

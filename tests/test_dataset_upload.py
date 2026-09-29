@@ -142,6 +142,60 @@ class DatasetUploadTests(unittest.TestCase):
         self.assertEqual([2, 3], issues[2]["lines"])
         self.assertEqual("same", issues[2]["case_id"])
 
+    def test_dataset_api_lists_versions_and_previews_cases(self) -> None:
+        repository = InMemoryRepository()
+        service = EvalKitService(repository)
+        dataset = service.create_dataset("版本化评测集", "tester")
+        first = service.import_dataset_version(
+            dataset.id, [{"id": "case-v1", "question": "第一版问题"}]
+        )
+        second = service.import_dataset_version(
+            dataset.id,
+            [
+                {
+                    "id": "case-v2-a",
+                    "question": "第二版问题 A",
+                    "tags": ["v2"],
+                },
+                {"id": "case-v2-b", "question": "第二版问题 B"},
+            ],
+        )
+        router = create_router(service)
+
+        list_datasets = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/datasets" and "GET" in route.methods
+        )
+        list_versions = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/datasets/{dataset_id}/versions"
+            and "GET" in route.methods
+        )
+        preview = next(
+            route.endpoint
+            for route in router.routes
+            if route.path
+            == "/api/v1/datasets/{dataset_id}/versions/{version_id}/cases"
+        )
+
+        datasets = list_datasets()
+        versions = list_versions(dataset.id)
+        page = preview(dataset.id, second.id, offset=1, limit=1)
+
+        self.assertEqual(1, len(datasets))
+        self.assertEqual(second.id, datasets[0]["current_version_id"])
+        self.assertEqual(2, datasets[0]["version_count"])
+        self.assertEqual([second.id, first.id], [item["id"] for item in versions])
+        self.assertEqual(2, page["total"])
+        self.assertEqual("case-v2-b", page["cases"][0]["id"])
+
+        other = service.create_dataset("其他评测集", "tester")
+        with self.assertRaises(HTTPException) as context:
+            preview(other.id, second.id, offset=0, limit=20)
+        self.assertEqual(404, context.exception.status_code)
+
 
 if __name__ == "__main__":
     unittest.main()

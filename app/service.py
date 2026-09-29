@@ -89,6 +89,77 @@ class EvalKitService:
         self._validate_cases(cases)
         return cases
 
+    def list_datasets(self) -> list[dict[str, Any]]:
+        """按创建时间倒序返回数据集及版本摘要。"""
+        datasets: list[dict[str, Any]] = []
+        for dataset in sorted(
+            self.repository.datasets.values(),
+            key=lambda item: item.created_at,
+            reverse=True,
+        ):
+            versions = self.list_dataset_versions(dataset.id)
+            datasets.append({
+                "id": dataset.id,
+                "name": dataset.name,
+                "owner_id": dataset.owner_id,
+                "current_version_id": dataset.current_version_id,
+                "created_at": dataset.created_at.isoformat(),
+                "version_count": len(versions),
+                "versions": versions,
+            })
+        return datasets
+
+    def list_dataset_versions(self, dataset_id: str) -> list[dict[str, Any]]:
+        """列出指定数据集的不可变版本，最新版本在前。"""
+        self._get_dataset(dataset_id)
+        versions = [
+            item
+            for item in self.repository.dataset_versions.values()
+            if item.dataset_id == dataset_id
+        ]
+        return [
+            {
+                "id": item.id,
+                "dataset_id": item.dataset_id,
+                "version_number": item.version_number,
+                "case_count": len(item.cases),
+                "checksum": item.checksum,
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in sorted(
+                versions, key=lambda item: item.version_number, reverse=True
+            )
+        ]
+
+    def preview_dataset_version(
+        self,
+        dataset_id: str,
+        version_id: str,
+        *,
+        offset: int = 0,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """分页返回版本样本，不修改不可变版本内容。"""
+        self._get_dataset(dataset_id)
+        try:
+            version = self.repository.dataset_versions[version_id]
+        except KeyError as error:
+            raise KeyError(f"数据集版本不存在：{version_id}") from error
+        if version.dataset_id != dataset_id:
+            raise KeyError(f"版本 {version_id} 不属于数据集 {dataset_id}")
+        if offset < 0 or not 1 <= limit <= 100:
+            raise ValueError("offset 必须大于等于 0，limit 必须在 1 到 100 之间")
+        selected = version.cases[offset : offset + limit]
+        return {
+            "dataset_id": dataset_id,
+            "version_id": version.id,
+            "version_number": version.version_number,
+            "total": len(version.cases),
+            "offset": offset,
+            "limit": limit,
+            "cases": [asdict(item) for item in selected],
+        }
+
     def create_config(self, name: str, retrieval_k: int = 5) -> EvaluationConfig:
         """创建确定性检索评测配置。"""
         if not name.strip() or retrieval_k <= 0:

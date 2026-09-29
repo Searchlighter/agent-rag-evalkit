@@ -236,6 +236,11 @@ def create_router(
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
 
+    @router.get("/datasets")
+    def list_datasets() -> list[dict[str, Any]]:
+        """列出当前进程内的数据集及其版本摘要。"""
+        return service.list_datasets()
+
     @router.post("/datasets/upload", status_code=201)
     def upload_dataset(request: UploadDatasetRequest) -> dict[str, Any]:
         """预先校验上传内容，通过后创建逻辑数据集及首个版本。"""
@@ -280,6 +285,28 @@ def create_router(
                 "case_count": len(version.cases),
             }
         except (ValueError, KeyError) as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
+    @router.get("/datasets/{dataset_id}/versions")
+    def list_dataset_versions(dataset_id: str) -> list[dict[str, Any]]:
+        """列出指定数据集的全部不可变版本。"""
+        try:
+            return service.list_dataset_versions(dataset_id)
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+
+    @router.get("/datasets/{dataset_id}/versions/{version_id}/cases")
+    def preview_dataset_version(
+        dataset_id: str, version_id: str, offset: int = 0, limit: int = 20
+    ) -> dict[str, Any]:
+        """分页预览指定版本的评测样本。"""
+        try:
+            return service.preview_dataset_version(
+                dataset_id, version_id, offset=offset, limit=limit
+            )
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
 
     @router.post("/configs")
