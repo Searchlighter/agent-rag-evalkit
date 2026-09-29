@@ -16,6 +16,7 @@ from .adapter_registry import (
     create_default_registry,
 )
 from .domain import AdapterType, BadcaseSeverity, BadcaseStatus, EvalRunStatus, new_id
+from .ingestion import parse_dataset_content
 from .service import EvalKitService
 
 
@@ -29,6 +30,16 @@ class ImportDatasetRequest(BaseModel):
     """导入一个不可变数据集版本的样本列表。"""
     cases: list[dict[str, Any]]
     actor_id: str = "api-user"
+
+
+class UploadDatasetRequest(BaseModel):
+    """浏览器上传的 UTF-8 JSONL/CSV 文件及数据集元数据。"""
+
+    name: str = Field(min_length=1, max_length=100)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=100)
+    filename: str = Field(min_length=1, max_length=255)
+    content: str = Field(min_length=1, max_length=5_000_000)
+    actor_id: str = Field(default="local-user", min_length=1, max_length=100)
 
 
 class CreateConfigRequest(BaseModel):
@@ -224,6 +235,29 @@ def create_router(
             return asdict(service.create_dataset(request.name, request.owner_id))
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
+
+    @router.post("/datasets/upload", status_code=201)
+    def upload_dataset(request: UploadDatasetRequest) -> dict[str, Any]:
+        """预先校验上传内容，通过后创建逻辑数据集及首个版本。"""
+        try:
+            raw_cases = parse_dataset_content(request.filename, request.content)
+            service.validate_dataset_cases(raw_cases)
+            dataset = service.create_dataset(request.name, request.owner_id)
+            version = service.import_dataset_version(
+                dataset.id, raw_cases, request.actor_id
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        return {
+            "dataset": asdict(dataset),
+            "version": {
+                "id": version.id,
+                "version_number": version.version_number,
+                "case_count": len(version.cases),
+                "checksum": version.checksum,
+            },
+            "source": {"filename": request.filename},
+        }
 
     @router.post("/datasets/{dataset_id}/versions")
     def import_dataset_version(dataset_id: str, request: ImportDatasetRequest) -> dict[str, Any]:

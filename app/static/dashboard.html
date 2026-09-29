@@ -66,6 +66,10 @@
     .connection-head { display:flex; justify-content:space-between; gap:16px; margin-bottom:13px; }
     .connection-grid { display:grid; grid-template-columns:minmax(260px,2fr) 1fr 1fr 1fr; gap:12px; align-items:end; }
     .connection-grid .wide-actions { grid-column:1/-1; }
+    .upload-grid { display:grid; grid-template-columns:1.2fr 1.6fr auto; gap:12px; align-items:end; }
+    .upload-help { margin-top:10px; padding:10px 12px; color:var(--muted); background:#0a1928; border-radius:9px; font-size:12px; }
+    .upload-result { margin-top:14px; }
+    .upload-result[hidden] { display:none; }
     .adapter-list { display:grid; gap:10px; }
     .adapter-card { padding:16px 18px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; }
     .adapter-title { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-weight:800; }
@@ -115,7 +119,7 @@
     footer { display:flex; justify-content:space-between; gap:16px; margin-top:18px; color:var(--muted); font-size:12px; }
     footer a { color:#87baff; }
     @media (max-width:1100px) { .workspace{grid-template-columns:1fr}.sidebar{position:static;height:auto;padding:14px 18px}.brand{padding:0 4px 12px}.nav{display:flex;overflow:auto;margin-top:12px}.nav button{white-space:nowrap;width:auto}.sidebar-meta{display:none}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.comparison{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr} header{align-items:flex-start;flex-direction:column} }
-    @media (max-width:900px) { .form-grid,.connection-grid{grid-template-columns:1fr 1fr}.button-row{grid-column:1/-1}.run-card{grid-template-columns:1fr 1fr}.run-card>div:first-child{grid-column:1/-1} }
+    @media (max-width:900px) { .form-grid,.connection-grid,.upload-grid{grid-template-columns:1fr 1fr}.button-row{grid-column:1/-1}.run-card{grid-template-columns:1fr 1fr}.run-card>div:first-child{grid-column:1/-1} }
     @media (max-width:620px) { .form-grid{grid-template-columns:1fr}.adapter-card{grid-template-columns:1fr}.button-row{grid-column:auto} }
     @media (max-width:560px) { .shell{padding:16px}.metrics{grid-template-columns:1fr 1fr}.metric-value{font-size:24px}.table-wrap{overflow:auto}.page-title{align-items:flex-start;flex-direction:column}.nav-icon{display:none} }
   </style>
@@ -178,7 +182,17 @@
     </section>
     <section class="page" data-page="datasets" hidden>
       <div class="page-title"><div><h2>数据集</h2><div class="subtitle">导入、校验和预览版本化评测样本</div></div></div>
-      <article class="panel empty-state"><div><div class="empty-state-icon">▤</div><h3>还没有用户导入的数据集</h3><p>当前页面中的样本属于合成演示数据。后续可在这里上传 JSONL 或 CSV，并查看逐行校验结果。</p><span class="coming">S2-05 / S2-07 即将实现</span></div></article>
+      <form class="panel form-panel" id="dataset-upload-form">
+        <div class="upload-grid">
+          <div class="field"><label for="dataset-name">数据集名称</label><input id="dataset-name" name="name" maxlength="100" placeholder="例如 客服知识库回归集" required></div>
+          <div class="field"><label for="dataset-file">JSONL / CSV 文件</label><input id="dataset-file" name="file" type="file" accept=".jsonl,.csv,text/csv,application/jsonl" required></div>
+          <button class="btn primary" id="dataset-upload-submit" type="submit">上传并校验</button>
+        </div>
+        <div class="upload-help">JSONL 每行必须是一个对象；CSV 必须包含 <strong>question</strong> 表头。expected_answers、expected_evidence 和 tags 在 CSV 中用 | 分隔。最大 5 MB。</div>
+        <div class="feedback" id="dataset-upload-feedback">文件校验通过后，将创建数据集及不可变的第一个版本。</div>
+      </form>
+      <article class="panel upload-result" id="dataset-upload-result" hidden></article>
+      <article class="panel empty-state" id="dataset-empty-state"><div><div class="empty-state-icon">▤</div><h3>还没有用户导入的数据集</h3><p>选择 UTF-8 编码的 JSONL 或 CSV 文件开始创建评测集。</p><span class="coming">版本列表与样本预览将在 S2-07 实现</span></div></article>
     </section>
     <section class="page" data-page="runs" hidden>
       <div class="page-title"><div><h2>评测运行</h2><div class="subtitle">创建任务并跟踪真实评测状态</div></div></div>
@@ -362,6 +376,39 @@
         adapterFeedback(message, 'success');
         await loadAdapters();
       } catch (error) { adapterFeedback(`保存失败：${error.message}`, 'error'); }
+    });
+    function datasetFeedback(message, state='') {
+      const element = document.querySelector('#dataset-upload-feedback');
+      element.textContent = message;
+      element.className = `feedback ${state}`;
+    }
+    document.querySelector('#dataset-upload-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const file = document.querySelector('#dataset-file').files[0];
+      const name = document.querySelector('#dataset-name').value.trim();
+      if (!file) return;
+      if (file.size > 5000000) {
+        datasetFeedback('上传失败：文件不能超过 5 MB。', 'error');
+        return;
+      }
+      const submit = document.querySelector('#dataset-upload-submit');
+      submit.disabled = true;
+      datasetFeedback('正在读取并校验文件……');
+      try {
+        let content;
+        try { content = new TextDecoder('utf-8', {fatal:true}).decode(await file.arrayBuffer()); }
+        catch { throw new Error('文件不是有效的 UTF-8 编码。'); }
+        const result = await api('/api/v1/datasets/upload', {method:'POST', body:JSON.stringify({name,filename:file.name,content})});
+        const dataset = result.dataset, version = result.version;
+        document.querySelector('#dataset-empty-state').hidden = true;
+        const card = document.querySelector('#dataset-upload-result');
+        card.hidden = false;
+        card.innerHTML = `<div class="panel-head"><h2>上传成功</h2><span class="source-badge user">USER</span></div><div class="adapter-title">${esc(dataset.name)}</div><div class="adapter-meta">${esc(result.source.filename)} · v${version.version_number} · ${version.case_count} Cases · SHA-256 ${esc(version.checksum.slice(0,12))}…</div>`;
+        datasetFeedback(`已创建 ${version.case_count} 条样本的数据集版本。`, 'success');
+        event.currentTarget.reset();
+      } catch (error) {
+        datasetFeedback(`上传失败：${error.message}`, 'error');
+      } finally { submit.disabled = false; }
     });
     function showDetail(item) {
       document.querySelectorAll('tbody tr').forEach(row => row.classList.toggle('active', row.dataset.id === item.case_id));

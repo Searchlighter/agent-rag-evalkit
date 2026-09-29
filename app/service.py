@@ -61,8 +61,7 @@ class EvalKitService:
     ) -> DatasetVersion:
         """校验样本并创建带 SHA-256 校验和的新版本快照。"""
         dataset = self._get_dataset(dataset_id)
-        cases = [EvalCase.from_dict(raw) for raw in raw_cases]
-        self._validate_cases(cases)
+        cases = self.validate_dataset_cases(raw_cases)
         canonical = json.dumps([asdict(case) for case in cases], ensure_ascii=False, sort_keys=True)
         checksum = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         version_number = 1 + sum(
@@ -81,6 +80,14 @@ class EvalKitService:
         self.repository.save_dataset(dataset)
         self._audit("import", "dataset_version", version.id, actor_id, {"case_count": len(cases)})
         return version
+
+    def validate_dataset_cases(
+        self, raw_cases: Iterable[dict[str, Any]]
+    ) -> list[EvalCase]:
+        """在写入仓储前校验上传样本结构、空集合和重复 ID。"""
+        cases = [EvalCase.from_dict(raw) for raw in raw_cases]
+        self._validate_cases(cases)
+        return cases
 
     def create_config(self, name: str, retrieval_k: int = 5) -> EvaluationConfig:
         """创建确定性检索评测配置。"""
