@@ -7,7 +7,7 @@ import unittest
 from fastapi import HTTPException
 
 from app.api import UploadDatasetRequest, create_router
-from app.ingestion import parse_dataset_content
+from app.ingestion import DatasetUploadValidationError, parse_dataset_content
 from app.repository import InMemoryRepository
 from app.service import EvalKitService
 
@@ -66,33 +66,81 @@ class DatasetUploadTests(unittest.TestCase):
         )
 
         invalid_requests = (
-            UploadDatasetRequest(
-                name="错误 JSONL", filename="bad.jsonl", content="{not-json}\n"
-            ),
-            UploadDatasetRequest(
-                name="错误 CSV", filename="bad.csv", content="id,tags\ncase-1,test\n"
-            ),
-            UploadDatasetRequest(
-                name="错误格式", filename="bad.txt", content="question"
-            ),
-            UploadDatasetRequest(
-                name="重复 ID",
-                filename="duplicate.jsonl",
-                content=(
-                    '{"id":"same","question":"问题一"}\n'
-                    '{"id":"same","question":"问题二"}\n'
+            (
+                UploadDatasetRequest(
+                    name="错误 JSONL", filename="bad.jsonl", content="{not-json}\n"
                 ),
+                "invalid_json",
+            ),
+            (
+                UploadDatasetRequest(
+                    name="错误 CSV",
+                    filename="bad.csv",
+                    content="id,tags\ncase-1,test\n",
+                ),
+                "missing_field",
+            ),
+            (
+                UploadDatasetRequest(
+                    name="错误格式", filename="bad.txt", content="question"
+                ),
+                "unsupported_format",
+            ),
+            (
+                UploadDatasetRequest(
+                    name="空数据集", filename="empty.jsonl", content=""
+                ),
+                "empty_dataset",
+            ),
+            (
+                UploadDatasetRequest(
+                    name="重复 ID",
+                    filename="duplicate.jsonl",
+                    content=(
+                        '{"id":"same","question":"问题一"}\n'
+                        '{"id":"same","question":"问题二"}\n'
+                    ),
+                ),
+                "duplicate_id",
             ),
         )
-        for request in invalid_requests:
+        for request, expected_code in invalid_requests:
             with self.subTest(filename=request.filename), self.assertRaises(
                 HTTPException
             ) as context:
                 upload(request)
             self.assertEqual(400, context.exception.status_code)
+            self.assertEqual(
+                "dataset_validation_failed", context.exception.detail["code"]
+            )
+            self.assertEqual(
+                expected_code, context.exception.detail["issues"][0]["code"]
+            )
 
         self.assertEqual({}, repository.datasets)
         self.assertEqual({}, repository.dataset_versions)
+
+    def test_jsonl_validation_reports_lines_missing_fields_and_duplicate_ids(self) -> None:
+        content = (
+            "{not-json}\n"
+            '{"id":"same","question":"问题一"}\n'
+            '{"id":"same","question":"问题二"}\n'
+            '{"id":"missing-question"}\n'
+        )
+
+        with self.assertRaises(DatasetUploadValidationError) as context:
+            parse_dataset_content("issues.jsonl", content)
+
+        issues = context.exception.issues
+        self.assertEqual(
+            ["invalid_json", "missing_field", "duplicate_id"],
+            [issue["code"] for issue in issues],
+        )
+        self.assertEqual(1, issues[0]["line"])
+        self.assertEqual("question", issues[1]["field"])
+        self.assertEqual(4, issues[1]["line"])
+        self.assertEqual([2, 3], issues[2]["lines"])
+        self.assertEqual("same", issues[2]["case_id"])
 
 
 if __name__ == "__main__":

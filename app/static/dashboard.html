@@ -70,6 +70,13 @@
     .upload-help { margin-top:10px; padding:10px 12px; color:var(--muted); background:#0a1928; border-radius:9px; font-size:12px; }
     .upload-result { margin-top:14px; }
     .upload-result[hidden] { display:none; }
+    .validation-errors { margin:14px 0; padding:16px; border:1px solid #693646; background:#281923; }
+    .validation-errors[hidden] { display:none; }
+    .validation-errors h3 { margin:0 0 10px; color:#ffc0c6; }
+    .validation-list { display:grid; gap:8px; }
+    .validation-item { padding:10px 12px; border-radius:9px; background:#351d28; }
+    .validation-item strong { color:#ff9ba5; }
+    .validation-location { display:inline-block; margin-right:8px; color:#ffd0d5; font-weight:800; }
     .adapter-list { display:grid; gap:10px; }
     .adapter-card { padding:16px 18px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; }
     .adapter-title { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-weight:800; }
@@ -191,6 +198,7 @@
         <div class="upload-help">JSONL 每行必须是一个对象；CSV 必须包含 <strong>question</strong> 表头。expected_answers、expected_evidence 和 tags 在 CSV 中用 | 分隔。最大 5 MB。</div>
         <div class="feedback" id="dataset-upload-feedback">文件校验通过后，将创建数据集及不可变的第一个版本。</div>
       </form>
+      <article class="panel validation-errors" id="dataset-validation-errors" hidden></article>
       <article class="panel upload-result" id="dataset-upload-result" hidden></article>
       <article class="panel empty-state" id="dataset-empty-state"><div><div class="empty-state-icon">▤</div><h3>还没有用户导入的数据集</h3><p>选择 UTF-8 编码的 JSONL 或 CSV 文件开始创建评测集。</p><span class="coming">版本列表与样本预览将在 S2-07 实现</span></div></article>
     </section>
@@ -239,7 +247,9 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         const detail = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail || data);
-        throw new Error(detail || `HTTP ${response.status}`);
+        const error = new Error(detail || `HTTP ${response.status}`);
+        error.detail = data.detail;
+        throw error;
       }
       return data;
     }
@@ -382,6 +392,18 @@
       element.textContent = message;
       element.className = `feedback ${state}`;
     }
+    function clearDatasetValidationErrors() {
+      const panel = document.querySelector('#dataset-validation-errors');
+      panel.hidden = true;
+      panel.innerHTML = '';
+    }
+    function showDatasetValidationErrors(issues) {
+      const labels = {invalid_json:'JSON 格式',invalid_record:'记录格式',missing_field:'字段缺失',invalid_field:'字段类型',duplicate_id:'重复 ID',unsupported_format:'文件格式',empty_dataset:'空数据集',encoding_error:'编码错误'};
+      const safeIssues = Array.isArray(issues) ? issues : [];
+      const panel = document.querySelector('#dataset-validation-errors');
+      panel.hidden = false;
+      panel.innerHTML = `<h3>发现 ${safeIssues.length} 个校验问题</h3><div class="validation-list">${safeIssues.map(issue => `<div class="validation-item"><span class="validation-location">${issue.line ? `第 ${issue.line} 行` : '文件级'}${issue.field ? ` · ${esc(issue.field)}` : ''}</span><strong>${esc(labels[issue.code] || issue.code)}</strong><div>${esc(issue.message)}</div></div>`).join('')}</div>`;
+    }
     document.querySelector('#dataset-upload-form').addEventListener('submit', async event => {
       event.preventDefault();
       const file = document.querySelector('#dataset-file').files[0];
@@ -393,11 +415,16 @@
       }
       const submit = document.querySelector('#dataset-upload-submit');
       submit.disabled = true;
+      clearDatasetValidationErrors();
       datasetFeedback('正在读取并校验文件……');
       try {
         let content;
         try { content = new TextDecoder('utf-8', {fatal:true}).decode(await file.arrayBuffer()); }
-        catch { throw new Error('文件不是有效的 UTF-8 编码。'); }
+        catch {
+          const error = new Error('文件不是有效的 UTF-8 编码。');
+          error.validationIssues = [{code:'encoding_error',message:error.message}];
+          throw error;
+        }
         const result = await api('/api/v1/datasets/upload', {method:'POST', body:JSON.stringify({name,filename:file.name,content})});
         const dataset = result.dataset, version = result.version;
         document.querySelector('#dataset-empty-state').hidden = true;
@@ -407,7 +434,9 @@
         datasetFeedback(`已创建 ${version.case_count} 条样本的数据集版本。`, 'success');
         event.currentTarget.reset();
       } catch (error) {
-        datasetFeedback(`上传失败：${error.message}`, 'error');
+        const issues = error.validationIssues || (error.detail && error.detail.issues);
+        datasetFeedback(`上传失败：${issues ? '数据集格式校验未通过。' : error.message}`, 'error');
+        if (issues) showDatasetValidationErrors(issues);
       } finally { submit.disabled = false; }
     });
     function showDetail(item) {

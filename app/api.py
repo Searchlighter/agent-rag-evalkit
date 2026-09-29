@@ -16,7 +16,7 @@ from .adapter_registry import (
     create_default_registry,
 )
 from .domain import AdapterType, BadcaseSeverity, BadcaseStatus, EvalRunStatus, new_id
-from .ingestion import parse_dataset_content
+from .ingestion import DatasetUploadValidationError, parse_dataset_content
 from .service import EvalKitService
 
 
@@ -38,7 +38,7 @@ class UploadDatasetRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     owner_id: str = Field(default="local-user", min_length=1, max_length=100)
     filename: str = Field(min_length=1, max_length=255)
-    content: str = Field(min_length=1, max_length=5_000_000)
+    content: str = Field(max_length=5_000_000)
     actor_id: str = Field(default="local-user", min_length=1, max_length=100)
 
 
@@ -246,6 +246,14 @@ def create_router(
             version = service.import_dataset_version(
                 dataset.id, raw_cases, request.actor_id
             )
+        except DatasetUploadValidationError as error:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "dataset_validation_failed",
+                    "issues": error.issues,
+                },
+            ) from error
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         return {
