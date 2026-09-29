@@ -142,6 +142,19 @@ class AdapterRegistry:
         """返回不含密钥的稳定排序配置列表。"""
         return [self._public_config(self._configs[key]) for key in sorted(self._configs)]
 
+    def get_run_binding(self, adapter_id: str) -> dict[str, object]:
+        """返回创建评测运行所需的当前版本和非敏感配置快照。"""
+        self.resolve(adapter_id)
+        config = self._get_config(adapter_id)
+        versions = self._versions.get(config.id, [])
+        if not versions:
+            return {"adapter_version_id": "", "adapter_snapshot": {}}
+        version = versions[-1]
+        return {
+            "adapter_version_id": version.id,
+            "adapter_snapshot": dict(version.settings),
+        }
+
     def resolve(self, adapter_id: str) -> TargetAgentAdapter:
         """按 ID 获取 Adapter，未知 ID 返回可诊断错误。"""
         normalized_id = adapter_id.strip()

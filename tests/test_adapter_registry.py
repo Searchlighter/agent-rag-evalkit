@@ -12,6 +12,7 @@ from app.adapter_registry import AdapterDisabledError, AdapterNotFoundError, Ada
 from app.api import (
     ConfigureHttpAdapterRequest,
     CreateAdapterRequest,
+    CreateEvalRunRequest,
     TestAdapterRequest,
     UpdateAdapterRequest,
     create_router,
@@ -321,6 +322,56 @@ class AdapterRegistryTests(unittest.TestCase):
             "TEAM_RAG_TOKEN", configured["connection"]["bearer_token_env"]
         )
         self.assertNotIn("runtime-secret", str(configured))
+
+    def test_create_run_api_uses_current_adapter_version_snapshot(self) -> None:
+        repository = InMemoryRepository()
+        service = EvalKitService(repository)
+        dataset = service.create_dataset("页面任务", "tester")
+        version = service.import_dataset_version(
+            dataset.id, [{"id": "case-1", "question": "测试问题"}]
+        )
+        evaluation_config = service.create_config("top-3", 3)
+        registry = AdapterRegistry()
+        registry.create_config("team-rag", "团队知识库", AdapterType.HTTP)
+        configured = registry.configure_http(
+            "team-rag",
+            endpoint="https://example.test/query",
+            timeout_seconds=8,
+            retries=1,
+            auth_method="none",
+        )
+        router = create_router(service, registry)
+        create_run = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/eval-runs" and "POST" in route.methods
+        )
+
+        run = create_run(
+            CreateEvalRunRequest(
+                dataset_version_id=version.id,
+                config_id=evaluation_config.id,
+                adapter_id="team-rag",
+                model_id="release-1",
+            )
+        )
+
+        self.assertEqual(configured["current_version_id"], run["adapter_version_id"])
+        self.assertEqual(
+            "https://example.test/query", run["adapter_snapshot"]["endpoint"]
+        )
+        self.assertEqual("queued", run["status"].value)
+
+        registry.update_config("team-rag", enabled=False)
+        with self.assertRaises(HTTPException) as context:
+            create_run(
+                CreateEvalRunRequest(
+                    dataset_version_id=version.id,
+                    config_id=evaluation_config.id,
+                    adapter_id="team-rag",
+                )
+            )
+        self.assertEqual(409, context.exception.status_code)
 
     def test_execute_api_rejects_run_bound_to_unknown_adapter(self) -> None:
         service = EvalKitService(InMemoryRepository())

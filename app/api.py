@@ -321,7 +321,15 @@ def create_router(
     def create_eval_run(request: CreateEvalRunRequest) -> dict[str, Any]:
         """创建 queued 状态的评测运行。"""
         try:
-            return asdict(service.create_eval_run(**request.model_dump()))
+            payload = request.model_dump()
+            binding = adapters.get_run_binding(request.adapter_id)
+            if not payload["adapter_version_id"]:
+                payload["adapter_version_id"] = binding["adapter_version_id"]
+            if not payload["adapter_snapshot"]:
+                payload["adapter_snapshot"] = binding["adapter_snapshot"]
+            return asdict(service.create_eval_run(**payload))
+        except (AdapterNotFoundError, AdapterDisabledError) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
         except (ValueError, KeyError) as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
 

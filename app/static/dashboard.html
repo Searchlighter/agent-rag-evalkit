@@ -88,6 +88,7 @@
     .dataset-preview th:nth-child(2) { width:44%; }
     .preview-question { font-weight:700; }
     .preview-evidence { color:var(--muted); font-size:11px; }
+    .run-create-grid { display:grid; grid-template-columns:1.5fr 1.2fr 1fr .6fr auto; gap:12px; align-items:end; }
     .adapter-list { display:grid; gap:10px; }
     .adapter-card { padding:16px 18px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; }
     .adapter-title { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-weight:800; }
@@ -137,7 +138,7 @@
     footer { display:flex; justify-content:space-between; gap:16px; margin-top:18px; color:var(--muted); font-size:12px; }
     footer a { color:#87baff; }
     @media (max-width:1100px) { .workspace{grid-template-columns:1fr}.sidebar{position:static;height:auto;padding:14px 18px}.brand{padding:0 4px 12px}.nav{display:flex;overflow:auto;margin-top:12px}.nav button{white-space:nowrap;width:auto}.sidebar-meta{display:none}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.comparison{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr} header{align-items:flex-start;flex-direction:column} }
-    @media (max-width:900px) { .form-grid,.connection-grid,.upload-grid{grid-template-columns:1fr 1fr}.button-row{grid-column:1/-1}.run-card{grid-template-columns:1fr 1fr}.run-card>div:first-child{grid-column:1/-1} }
+    @media (max-width:900px) { .form-grid,.connection-grid,.upload-grid,.run-create-grid{grid-template-columns:1fr 1fr}.button-row{grid-column:1/-1}.run-card{grid-template-columns:1fr 1fr}.run-card>div:first-child{grid-column:1/-1} }
     @media (max-width:620px) { .form-grid{grid-template-columns:1fr}.adapter-card{grid-template-columns:1fr}.button-row{grid-column:auto} }
     @media (max-width:560px) { .shell{padding:16px}.metrics{grid-template-columns:1fr 1fr}.metric-value{font-size:24px}.table-wrap{overflow:auto}.page-title{align-items:flex-start;flex-direction:column}.nav-icon{display:none} }
   </style>
@@ -216,9 +217,19 @@
     </section>
     <section class="page" data-page="runs" hidden>
       <div class="page-title"><div><h2>评测运行</h2><div class="subtitle">创建任务并跟踪真实评测状态</div></div></div>
+      <form class="panel form-panel" id="eval-run-form">
+        <div class="run-create-grid">
+          <div class="field"><label for="run-dataset-version">数据集版本</label><select id="run-dataset-version" name="dataset_version_id" required><option value="">正在加载数据集……</option></select></div>
+          <div class="field"><label for="run-adapter">Adapter</label><select id="run-adapter" name="adapter_id" required><option value="">正在加载 Adapter……</option></select></div>
+          <div class="field"><label for="run-model-id">模型 / 发布标识</label><input id="run-model-id" name="model_id" maxlength="100" placeholder="例如 release-2026-09"></div>
+          <div class="field"><label for="run-retrieval-k">Top-K</label><input id="run-retrieval-k" name="retrieval_k" type="number" min="1" max="100" value="5" required></div>
+          <button class="btn primary" id="eval-run-submit" type="submit">创建评测任务</button>
+        </div>
+        <div class="feedback" id="eval-run-feedback">任务创建后进入 queued 状态，不会自动执行。</div>
+      </form>
       <section class="run-group">
         <div class="run-group-head"><h3>用户运行</h3><span class="pill" id="user-run-count">0 Runs</span></div>
-        <div class="run-list" id="user-runs"><article class="panel empty-state"><div><div class="empty-state-icon">▷</div><h3>暂无用户创建的评测运行</h3><p>后续可在这里选择数据集与 Adapter 发起评测。用户运行不会与下方 Mock 演示混合统计。</p><span class="coming">S2-08 / S2-09 即将实现</span></div></article></div>
+        <div class="run-list" id="user-runs"><article class="panel empty-state"><div><div class="empty-state-icon">▷</div><h3>暂无用户创建的评测运行</h3><p>使用上方表单选择数据集版本与 Adapter 创建任务。用户运行不会与下方 Mock 演示混合统计。</p></div></article></div>
       </section>
       <section class="run-group">
         <div class="run-group-head"><h3>内置演示运行</h3><span class="source-badge demo">DEMO ONLY</span></div>
@@ -253,7 +264,7 @@
       const title = isDemo ? '内置 Mock 演示' : item.dataset_name;
       return `<article class="panel run-card"><div><div class="run-card-title"><span class="source-badge ${source}">${label}</span>${esc(title)}</div><div class="run-card-meta">${esc(item.run_id)} · ${esc(item.adapter_id)}${item.model_id ? ` · ${esc(item.model_id)}` : ''}</div></div><div class="run-stat"><span>状态</span><strong>${esc(item.status)}</strong></div><div class="run-stat"><span>进度</span><strong>${item.completed_case_count}/${item.dataset_case_count}</strong></div><div class="run-stat"><span>Recall@K</span><strong>${pct(item.metrics.recall_at_k)}</strong></div></article>`;
     }
-    let adapterItems = [], editingAdapterId = null, configuringAdapterId = null;
+    let adapterItems = [], datasetItems = [], editingAdapterId = null, configuringAdapterId = null;
     async function api(url, options={}) {
       const response = await fetch(url, {headers:{'Content-Type':'application/json'}, ...options});
       const data = await response.json().catch(() => ({}));
@@ -317,10 +328,12 @@
       const list = document.querySelector('#adapter-list');
       if (!adapterItems.length) {
         list.innerHTML = '<article class="panel empty-state"><div><div class="empty-state-icon">↗</div><h3>尚未创建 Adapter</h3><p>使用上方表单创建第一个逻辑配置。</p></div></article>';
+        refreshRunOptions();
         return;
       }
       list.innerHTML = adapterItems.map(item => `<article class="panel adapter-card"><div><div class="adapter-title"><span class="state-dot ${item.enabled ? 'on' : ''}"></span>${esc(item.name)}${item.system ? '<span class="source-badge demo">SYSTEM</span>' : '<span class="source-badge user">USER</span>'}</div><div class="adapter-meta">${esc(item.id)} · ${esc(item.adapter_type.toUpperCase())} · ${item.configured ? `已配置${item.connection ? ` · v${item.connection.version_number}` : ''}` : '待配置连接参数'} · ${item.enabled ? '已启用' : '已停用'}</div></div><div class="adapter-actions">${item.adapter_type === 'http' ? `<button class="btn primary" data-adapter-action="configure" data-id="${esc(item.id)}">配置连接</button>` : ''}<button class="btn" data-adapter-action="edit" data-id="${esc(item.id)}">编辑</button><button class="btn" data-adapter-action="toggle" data-id="${esc(item.id)}">${item.enabled ? '停用' : '启用'}</button><button class="btn danger" data-adapter-action="delete" data-id="${esc(item.id)}" ${item.system ? 'disabled title="系统预配置项不可删除"' : ''}>删除</button></div></article>`).join('');
       list.querySelectorAll('[data-adapter-action]').forEach(button => button.addEventListener('click', () => handleAdapterAction(button.dataset.adapterAction, button.dataset.id)));
+      refreshRunOptions();
     }
     async function loadAdapters() {
       try {
@@ -405,10 +418,12 @@
       element.className = `feedback ${state}`;
     }
     function renderDatasets(items) {
+      datasetItems = items;
       document.querySelector('#dataset-count').textContent = `${items.length} Datasets`;
       const list = document.querySelector('#dataset-list');
       if (!items.length) {
         list.innerHTML = '<article class="panel empty-state"><div><div class="empty-state-icon">▤</div><h3>还没有用户导入的数据集</h3><p>选择 UTF-8 编码的 JSONL 或 CSV 文件开始创建评测集。</p></div></article>';
+        refreshRunOptions();
         return;
       }
       list.innerHTML = items.map(item => {
@@ -417,6 +432,16 @@
         return `<article class="panel dataset-card"><div class="dataset-card-head"><div><div class="adapter-title">${esc(item.name)}<span class="source-badge ${isDemo ? 'demo' : 'user'}">${isDemo ? 'DEMO' : 'USER'}</span></div><div class="adapter-meta">${esc(item.id)} · ${item.version_count} 个版本 · Owner ${esc(item.owner_id)}</div></div><span class="pill">${item.current_version_id ? '已就绪' : '无版本'}</span></div><div class="version-list">${versions || '<span class="subtitle">尚无可预览版本</span>'}</div></article>`;
       }).join('');
       list.querySelectorAll('[data-version-id]').forEach(button => button.addEventListener('click', () => loadDatasetPreview(button.dataset.datasetId, button.dataset.versionId)));
+      refreshRunOptions();
+    }
+    function refreshRunOptions() {
+      const datasetSelect = document.querySelector('#run-dataset-version');
+      const adapterSelect = document.querySelector('#run-adapter');
+      const versions = datasetItems.flatMap(dataset => dataset.versions.map(version => ({...version,dataset_name:dataset.name,is_demo:dataset.owner_id === 'dashboard-demo'})));
+      const runnableAdapters = adapterItems.filter(item => item.configured && item.enabled);
+      datasetSelect.innerHTML = versions.length ? versions.map(item => `<option value="${esc(item.id)}">${esc(item.dataset_name)} · v${item.version_number} · ${item.case_count} Cases${item.is_demo ? ' · DEMO' : ''}</option>`).join('') : '<option value="">暂无可用数据集版本</option>';
+      adapterSelect.innerHTML = runnableAdapters.length ? runnableAdapters.map(item => `<option value="${esc(item.id)}">${esc(item.name)} · ${esc(item.adapter_type.toUpperCase())}</option>`).join('') : '<option value="">暂无已启用且配置完成的 Adapter</option>';
+      document.querySelector('#eval-run-submit').disabled = !versions.length || !runnableAdapters.length;
     }
     async function loadDatasets() {
       try {
@@ -486,6 +511,28 @@
         if (issues) showDatasetValidationErrors(issues);
       } finally { submit.disabled = false; }
     });
+    function runFeedback(message, state='') {
+      const element = document.querySelector('#eval-run-feedback');
+      element.textContent = message;
+      element.className = `feedback ${state}`;
+    }
+    document.querySelector('#eval-run-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      const submit = document.querySelector('#eval-run-submit');
+      submit.disabled = true;
+      runFeedback('正在创建评测任务……');
+      try {
+        const config = await api('/api/v1/configs', {method:'POST', body:JSON.stringify({name:`Web 评测 · ${new Date().toLocaleString()}`,retrieval_k:Number(form.get('retrieval_k'))})});
+        const run = await api('/api/v1/eval-runs', {method:'POST', body:JSON.stringify({dataset_version_id:form.get('dataset_version_id'),config_id:config.id,adapter_id:form.get('adapter_id'),model_id:form.get('model_id') || ''})});
+        runFeedback(`任务 ${run.id} 已创建，当前状态为 ${run.status}。`, 'success');
+        await load();
+      } catch (error) {
+        runFeedback(`创建失败：${error.message}`, 'error');
+      } finally {
+        refreshRunOptions();
+      }
+    });
     function showDetail(item) {
       document.querySelectorAll('tbody tr').forEach(row => row.classList.toggle('active', row.dataset.id === item.case_id));
       document.querySelector('#detail').innerHTML = `<div class="panel-head"><h2>Case 诊断</h2><span class="pill">${esc(item.case_id)}</span></div><h3>${esc(item.question)}</h3><div class="detail-row"><span class="detail-label">模型回答</span><div class="code">${esc(item.answer)}</div></div><div class="detail-row"><span class="detail-label">召回证据</span><div class="code">${esc(item.retrieval_ids.join(', ') || '无召回')}</div></div><div class="detail-row"><span class="detail-label">诊断结论</span><strong class="${item.metrics.recall_at_k === 0 ? 'fail' : 'pass'}">${esc(item.diagnosis.suggested_category)}</strong><div class="subtitle">${esc(item.diagnosis.suggestion)}</div></div>`;
@@ -511,7 +558,7 @@
         document.querySelector('#badcase-count').textContent = `${data.badcases.length} Open`;
         document.querySelector('#badcases').innerHTML = data.badcases.length ? data.badcases.map(item=>`<div class="badcase"><div class="badcase-top"><span>${esc(item.category)}</span><span class="severity">${esc(item.severity)}</span></div><div class="subtitle">${esc(item.case_id)} · ${esc(item.note)}</div></div>`).join('') : '<div class="empty">当前没有 Badcase</div>';
         document.querySelector('#user-run-count').textContent = `${data.user_runs.length} Runs`;
-        document.querySelector('#user-runs').innerHTML = data.user_runs.length ? data.user_runs.map(item=>runCard(item,'user')).join('') : '<article class="panel empty-state"><div><div class="empty-state-icon">▷</div><h3>暂无用户创建的评测运行</h3><p>后续可在这里选择数据集与 Adapter 发起评测。用户运行不会与下方 Mock 演示混合统计。</p><span class="coming">S2-08 / S2-09 即将实现</span></div></article>';
+        document.querySelector('#user-runs').innerHTML = data.user_runs.length ? data.user_runs.map(item=>runCard(item,'user')).join('') : '<article class="panel empty-state"><div><div class="empty-state-icon">▷</div><h3>暂无用户创建的评测运行</h3><p>使用上方表单选择数据集版本与 Adapter 创建任务。用户运行不会与下方 Mock 演示混合统计。</p></div></article>';
         document.querySelector('#demo-run').innerHTML = runCard(data.demo.summary,'demo');
         if (data.results.length) showDetail(data.results.find(x=>x.metrics.recall_at_k===0) || data.results[0]);
       } catch (error) {
