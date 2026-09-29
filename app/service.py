@@ -586,6 +586,12 @@ class EvalKitService:
             fieldnames=[
                 "case_id",
                 "status",
+                "question",
+                "answer",
+                "citations",
+                "retrieval_ids",
+                "expected_answers",
+                "expected_evidence",
                 "recall_at_k",
                 "mrr",
                 "citation_coverage",
@@ -594,15 +600,21 @@ class EvalKitService:
             ],
         )
         writer.writeheader()
-        for item in self.list_case_results(run_id):
+        for item in self.list_case_result_details(run_id):
             writer.writerow({
-                "case_id": item.case_id,
-                "status": item.status,
-                "recall_at_k": item.metrics.get("recall_at_k"),
-                "mrr": item.metrics.get("mrr"),
-                "citation_coverage": item.metrics.get("citation_coverage"),
-                "not_evaluable_reasons": "|".join(item.not_evaluable_reasons),
-                "error": item.error or "",
+                "case_id": item["case_id"],
+                "status": item["status"],
+                "question": item["question"],
+                "answer": item["answer"],
+                "citations": "|".join(item["citations"]),
+                "retrieval_ids": "|".join(item["retrieval_ids"]),
+                "expected_answers": "|".join(item["expected_answers"]),
+                "expected_evidence": "|".join(item["expected_evidence"]),
+                "recall_at_k": item["metrics"].get("recall_at_k"),
+                "mrr": item["metrics"].get("mrr"),
+                "citation_coverage": item["metrics"].get("citation_coverage"),
+                "not_evaluable_reasons": "|".join(item["not_evaluable_reasons"]),
+                "error": item["error"] or "",
             })
         return output.getvalue()
 

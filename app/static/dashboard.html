@@ -70,7 +70,7 @@
     .field input,.field select { width:100%; min-height:40px; padding:8px 10px; border:1px solid var(--line); border-radius:9px; color:var(--text); background:#091827; font:inherit; }
     .field input:focus,.field select:focus { outline:2px solid rgba(77,226,197,.28); border-color:var(--cyan); }
     .button-row,.adapter-actions { display:flex; gap:7px; flex-wrap:wrap; }
-    .btn { min-height:38px; padding:7px 12px; border:1px solid var(--line); border-radius:9px; color:var(--text); background:#14283e; font:inherit; cursor:pointer; }
+    .btn { min-height:38px; padding:7px 12px; border:1px solid var(--line); border-radius:9px; color:var(--text); background:#14283e; font:inherit; cursor:pointer; display:inline-flex; align-items:center; text-decoration:none; }
     .btn:hover { border-color:#41658a; }
     .btn.primary { color:#042019; background:var(--cyan); border-color:var(--cyan); font-weight:800; }
     .btn.danger { color:#ffc0c6; background:#301923; border-color:#5a2d3c; }
@@ -364,7 +364,8 @@
       panel.innerHTML = '<div class="empty">正在加载逐 Case 结果……</div>';
       try {
         const items = await api(`/api/v1/eval-runs/${encodeURIComponent(runId)}/results`);
-        panel.innerHTML = `<div class="panel-head"><div><h2>逐 Case 结果</h2><div class="subtitle">${esc(runId)} · ${items.length} Cases</div></div><button class="btn" id="run-results-close" type="button">关闭</button></div>${items.length ? `<div class="case-result-layout"><div class="table-wrap"><table><thead><tr><th>问题</th><th>状态</th><th>Recall / MRR</th></tr></thead><tbody id="run-case-results">${items.map(item => `<tr data-case-id="${esc(item.case_id)}"><td><div class="question">${esc(item.question)}</div><div class="preview-evidence">${esc(item.case_id)}</div></td><td>${esc(item.status)}</td><td>${pct(item.metrics.recall_at_k)} / ${pct(item.metrics.mrr)}</td></tr>`).join('')}</tbody></table></div><div class="case-result-detail" id="run-case-detail"></div></div>` : '<div class="empty">该运行还没有 Case 结果。</div>'}`;
+        const downloadPrefix = `/api/v1/eval-runs/${encodeURIComponent(runId)}/results`;
+        panel.innerHTML = `<div class="panel-head"><div><h2>逐 Case 结果</h2><div class="subtitle">${esc(runId)} · ${items.length} Cases</div></div><div class="button-row"><a class="btn" href="${downloadPrefix}.csv" download>下载 CSV</a><a class="btn" href="${downloadPrefix}.json" download>下载 JSON</a><button class="btn" id="run-results-close" type="button">关闭</button></div></div>${items.length ? `<div class="case-result-layout"><div class="table-wrap"><table><thead><tr><th>问题</th><th>状态</th><th>Recall / MRR</th></tr></thead><tbody id="run-case-results">${items.map(item => `<tr data-case-id="${esc(item.case_id)}"><td><div class="question">${esc(item.question)}</div><div class="preview-evidence">${esc(item.case_id)}</div></td><td>${esc(item.status)}</td><td>${pct(item.metrics.recall_at_k)} / ${pct(item.metrics.mrr)}</td></tr>`).join('')}</tbody></table></div><div class="case-result-detail" id="run-case-detail"></div></div>` : '<div class="empty">该运行还没有 Case 结果。</div>'}`;
         panel.querySelector('#run-results-close').addEventListener('click', () => { panel.hidden = true; });
         if (items.length) {
           panel.querySelectorAll('#run-case-results tr').forEach((row,index) => row.addEventListener('click', () => renderRunCaseDetail(runId, items[index])));

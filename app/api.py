@@ -6,7 +6,8 @@ from dataclasses import asdict
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from .adapter_registry import (
@@ -377,10 +378,35 @@ def create_router(
             raise HTTPException(status_code=404, detail=str(error)) from error
 
     @router.get("/eval-runs/{run_id}/results.csv", response_class=PlainTextResponse)
-    def export_results(run_id: str) -> str:
+    def export_results(run_id: str) -> PlainTextResponse:
         """将确定性指标导出为 CSV。"""
         try:
-            return service.export_case_results_csv(run_id)
+            content = "\ufeff" + service.export_case_results_csv(run_id)
+            return PlainTextResponse(
+                content,
+                media_type="text/csv; charset=utf-8",
+                headers={
+                    "Content-Disposition": (
+                        f'attachment; filename="eval-results-{run_id}.csv"'
+                    )
+                },
+            )
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+
+    @router.get("/eval-runs/{run_id}/results.json", response_class=JSONResponse)
+    def export_results_json(run_id: str) -> JSONResponse:
+        """将完整逐样本结果导出为 JSON 附件。"""
+        try:
+            content = service.list_case_result_details(run_id)
+            return JSONResponse(
+                jsonable_encoder(content),
+                headers={
+                    "Content-Disposition": (
+                        f'attachment; filename="eval-results-{run_id}.json"'
+                    )
+                },
+            )
         except KeyError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
 

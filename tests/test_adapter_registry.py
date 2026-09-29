@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 from unittest.mock import patch
 
@@ -371,6 +372,16 @@ class AdapterRegistryTests(unittest.TestCase):
             for route in router.routes
             if route.path == "/api/v1/eval-runs/{run_id}/cases/{case_id}/diagnosis"
         )
+        export_csv = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/eval-runs/{run_id}/results.csv"
+        )
+        export_json = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/eval-runs/{run_id}/results.json"
+        )
 
         run = create_run(
             CreateEvalRunRequest(
@@ -434,6 +445,23 @@ class AdapterRegistryTests(unittest.TestCase):
         self.assertEqual(12.5, trace[0]["duration_ms"])
         self.assertEqual("needs_manual_review", diagnosis["suggested_category"])
         self.assertEqual(1, diagnosis["trace_event_count"])
+        csv_download = export_csv(run["id"])
+        json_download = export_json(run["id"])
+        self.assertTrue(csv_download.media_type.startswith("text/csv"))
+        downloaded_csv = csv_download.body.decode("utf-8")
+        self.assertTrue(downloaded_csv.startswith("\ufeffcase_id,status,question"))
+        self.assertIn("测试问题", downloaded_csv)
+        self.assertIn("测试回答", downloaded_csv)
+        self.assertEqual(
+            f'attachment; filename="eval-results-{run["id"]}.csv"',
+            csv_download.headers["content-disposition"],
+        )
+        downloaded_results = json.loads(json_download.body)
+        self.assertEqual("测试问题", downloaded_results[0]["question"])
+        self.assertEqual(
+            f'attachment; filename="eval-results-{run["id"]}.json"',
+            json_download.headers["content-disposition"],
+        )
 
         registry.update_config("team-rag", enabled=False)
         with self.assertRaises(HTTPException) as context:
