@@ -61,6 +61,11 @@
     .btn:disabled { opacity:.45; cursor:not-allowed; }
     .feedback { min-height:20px; margin:8px 2px 0; color:var(--muted); font-size:12px; }
     .feedback.success { color:#8ff0bc; } .feedback.error { color:#ffc0c6; }
+    .connection-panel { margin-bottom:14px; border-color:#2c5875; }
+    .connection-panel[hidden] { display:none; }
+    .connection-head { display:flex; justify-content:space-between; gap:16px; margin-bottom:13px; }
+    .connection-grid { display:grid; grid-template-columns:minmax(260px,2fr) 1fr 1fr 1fr; gap:12px; align-items:end; }
+    .connection-grid .wide-actions { grid-column:1/-1; }
     .adapter-list { display:grid; gap:10px; }
     .adapter-card { padding:16px 18px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; }
     .adapter-title { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-weight:800; }
@@ -110,7 +115,7 @@
     footer { display:flex; justify-content:space-between; gap:16px; margin-top:18px; color:var(--muted); font-size:12px; }
     footer a { color:#87baff; }
     @media (max-width:1100px) { .workspace{grid-template-columns:1fr}.sidebar{position:static;height:auto;padding:14px 18px}.brand{padding:0 4px 12px}.nav{display:flex;overflow:auto;margin-top:12px}.nav button{white-space:nowrap;width:auto}.sidebar-meta{display:none}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.comparison{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr} header{align-items:flex-start;flex-direction:column} }
-    @media (max-width:900px) { .form-grid{grid-template-columns:1fr 1fr}.button-row{grid-column:1/-1}.run-card{grid-template-columns:1fr 1fr}.run-card>div:first-child{grid-column:1/-1} }
+    @media (max-width:900px) { .form-grid,.connection-grid{grid-template-columns:1fr 1fr}.button-row{grid-column:1/-1}.run-card{grid-template-columns:1fr 1fr}.run-card>div:first-child{grid-column:1/-1} }
     @media (max-width:620px) { .form-grid{grid-template-columns:1fr}.adapter-card{grid-template-columns:1fr}.button-row{grid-column:auto} }
     @media (max-width:560px) { .shell{padding:16px}.metrics{grid-template-columns:1fr 1fr}.metric-value{font-size:24px}.table-wrap{overflow:auto}.page-title{align-items:flex-start;flex-direction:column}.nav-icon{display:none} }
   </style>
@@ -155,6 +160,19 @@
           <div class="button-row"><button class="btn primary" id="adapter-submit" type="submit">创建 Adapter</button><button class="btn" id="adapter-cancel" type="button" hidden>取消编辑</button></div>
         </div>
         <div class="feedback" id="adapter-feedback">创建后显示为“待配置”，下一步再填写连接参数。</div>
+      </form>
+      <form class="panel connection-panel" id="http-configuration-form" hidden>
+        <div class="connection-head"><div><h2>HTTP 连接配置</h2><div class="subtitle" id="connection-adapter-label"></div></div><button class="btn" id="connection-close" type="button">关闭</button></div>
+        <div class="connection-grid">
+          <div class="field"><label for="connection-endpoint">Endpoint</label><input id="connection-endpoint" name="endpoint" type="url" maxlength="2048" placeholder="http://127.0.0.1:8011/query" required></div>
+          <div class="field"><label for="connection-auth">鉴权方式</label><select id="connection-auth" name="auth_method"><option value="none">无需鉴权</option><option value="bearer_env">Bearer Token（环境变量）</option></select></div>
+          <div class="field" id="credential-env-field" hidden><label for="connection-token-env">Token 环境变量</label><input id="connection-token-env" name="bearer_token_env" maxlength="128" pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="EVALKIT_HTTP_TOKEN"></div>
+          <div class="field"><label for="connection-timeout">超时（秒）</label><input id="connection-timeout" name="timeout_seconds" type="number" min="0.1" max="300" step="0.1" value="15" required></div>
+          <div class="field"><label for="connection-retries">失败重试</label><input id="connection-retries" name="retries" type="number" min="0" max="5" value="1" required></div>
+          <div class="field"><label for="connection-question">连接测试问题</label><input id="connection-question" name="question" maxlength="500" value="EvalKit connection test" required></div>
+          <div class="button-row wide-actions"><button class="btn primary" type="submit">保存连接配置</button><button class="btn" id="connection-test" type="button">测试连接</button></div>
+        </div>
+        <div class="feedback" id="connection-feedback">Token 仅从服务进程的环境变量读取，不会保存在 EvalKit 中。</div>
       </form>
       <div class="adapter-list" id="adapter-list"><article class="panel empty-state"><div><div class="empty-state-icon">↗</div><h3>正在加载 Adapter</h3></div></article></div>
     </section>
@@ -201,7 +219,7 @@
       const title = isDemo ? '内置 Mock 演示' : item.dataset_name;
       return `<article class="panel run-card"><div><div class="run-card-title"><span class="source-badge ${source}">${label}</span>${esc(title)}</div><div class="run-card-meta">${esc(item.run_id)} · ${esc(item.adapter_id)}${item.model_id ? ` · ${esc(item.model_id)}` : ''}</div></div><div class="run-stat"><span>状态</span><strong>${esc(item.status)}</strong></div><div class="run-stat"><span>进度</span><strong>${item.completed_case_count}/${item.dataset_case_count}</strong></div><div class="run-stat"><span>Recall@K</span><strong>${pct(item.metrics.recall_at_k)}</strong></div></article>`;
     }
-    let adapterItems = [], editingAdapterId = null;
+    let adapterItems = [], editingAdapterId = null, configuringAdapterId = null;
     async function api(url, options={}) {
       const response = await fetch(url, {headers:{'Content-Type':'application/json'}, ...options});
       const data = await response.json().catch(() => ({}));
@@ -215,6 +233,39 @@
       const element = document.querySelector('#adapter-feedback');
       element.textContent = message;
       element.className = `feedback ${state}`;
+    }
+    function connectionFeedback(message, state='') {
+      const element = document.querySelector('#connection-feedback');
+      element.textContent = message;
+      element.className = `feedback ${state}`;
+    }
+    function toggleCredentialField() {
+      const enabled = document.querySelector('#connection-auth').value === 'bearer_env';
+      document.querySelector('#credential-env-field').hidden = !enabled;
+      document.querySelector('#connection-token-env').required = enabled;
+    }
+    function closeConnectionForm() {
+      configuringAdapterId = null;
+      document.querySelector('#http-configuration-form').hidden = true;
+    }
+    function openConnectionForm(item) {
+      if (item.adapter_type !== 'http') {
+        adapterFeedback('当前仅支持配置通用 HTTP Adapter。', 'error');
+        return;
+      }
+      configuringAdapterId = item.id;
+      const connection = item.connection || {};
+      document.querySelector('#connection-adapter-label').textContent = `${item.name} · ${item.id}`;
+      document.querySelector('#connection-endpoint').value = connection.endpoint || '';
+      document.querySelector('#connection-auth').value = connection.auth_method || 'none';
+      document.querySelector('#connection-token-env').value = connection.bearer_token_env || '';
+      document.querySelector('#connection-timeout').value = connection.timeout_seconds ?? 15;
+      document.querySelector('#connection-retries').value = connection.retries ?? 1;
+      toggleCredentialField();
+      connectionFeedback('Token 仅从服务进程的环境变量读取，不会保存在 EvalKit 中。');
+      const panel = document.querySelector('#http-configuration-form');
+      panel.hidden = false;
+      panel.scrollIntoView({behavior:'smooth', block:'start'});
     }
     function resetAdapterForm() {
       editingAdapterId = null;
@@ -232,7 +283,7 @@
         list.innerHTML = '<article class="panel empty-state"><div><div class="empty-state-icon">↗</div><h3>尚未创建 Adapter</h3><p>使用上方表单创建第一个逻辑配置。</p></div></article>';
         return;
       }
-      list.innerHTML = adapterItems.map(item => `<article class="panel adapter-card"><div><div class="adapter-title"><span class="state-dot ${item.enabled ? 'on' : ''}"></span>${esc(item.name)}${item.system ? '<span class="source-badge demo">SYSTEM</span>' : '<span class="source-badge user">USER</span>'}</div><div class="adapter-meta">${esc(item.id)} · ${esc(item.adapter_type.toUpperCase())} · ${item.configured ? '已配置运行时' : '待配置连接参数'} · ${item.enabled ? '已启用' : '已停用'}</div></div><div class="adapter-actions"><button class="btn" data-adapter-action="edit" data-id="${esc(item.id)}">编辑</button><button class="btn" data-adapter-action="toggle" data-id="${esc(item.id)}">${item.enabled ? '停用' : '启用'}</button><button class="btn danger" data-adapter-action="delete" data-id="${esc(item.id)}" ${item.system ? 'disabled title="系统预配置项不可删除"' : ''}>删除</button></div></article>`).join('');
+      list.innerHTML = adapterItems.map(item => `<article class="panel adapter-card"><div><div class="adapter-title"><span class="state-dot ${item.enabled ? 'on' : ''}"></span>${esc(item.name)}${item.system ? '<span class="source-badge demo">SYSTEM</span>' : '<span class="source-badge user">USER</span>'}</div><div class="adapter-meta">${esc(item.id)} · ${esc(item.adapter_type.toUpperCase())} · ${item.configured ? `已配置${item.connection ? ` · v${item.connection.version_number}` : ''}` : '待配置连接参数'} · ${item.enabled ? '已启用' : '已停用'}</div></div><div class="adapter-actions">${item.adapter_type === 'http' ? `<button class="btn primary" data-adapter-action="configure" data-id="${esc(item.id)}">配置连接</button>` : ''}<button class="btn" data-adapter-action="edit" data-id="${esc(item.id)}">编辑</button><button class="btn" data-adapter-action="toggle" data-id="${esc(item.id)}">${item.enabled ? '停用' : '启用'}</button><button class="btn danger" data-adapter-action="delete" data-id="${esc(item.id)}" ${item.system ? 'disabled title="系统预配置项不可删除"' : ''}>删除</button></div></article>`).join('');
       list.querySelectorAll('[data-adapter-action]').forEach(button => button.addEventListener('click', () => handleAdapterAction(button.dataset.adapterAction, button.dataset.id)));
     }
     async function loadAdapters() {
@@ -246,6 +297,10 @@
     async function handleAdapterAction(action, id) {
       const item = adapterItems.find(candidate => candidate.id === id);
       if (!item) return;
+      if (action === 'configure') {
+        openConnectionForm(item);
+        return;
+      }
       if (action === 'edit') {
         editingAdapterId = id;
         document.querySelector('#adapter-id').value = item.id;
@@ -262,12 +317,37 @@
       if (action === 'delete' && !confirm(`确认删除 Adapter“${item.name}”吗？`)) return;
       try {
         if (action === 'toggle') await api(`/api/v1/adapters/${encodeURIComponent(id)}`, {method:'PATCH', body:JSON.stringify({enabled:!item.enabled})});
-        if (action === 'delete') await api(`/api/v1/adapters/${encodeURIComponent(id)}`, {method:'DELETE'});
+        if (action === 'delete') {
+          await api(`/api/v1/adapters/${encodeURIComponent(id)}`, {method:'DELETE'});
+          if (configuringAdapterId === id) closeConnectionForm();
+        }
         adapterFeedback(action === 'delete' ? 'Adapter 已删除。' : 'Adapter 状态已更新。', 'success');
         await loadAdapters();
       } catch (error) { adapterFeedback(`操作失败：${error.message}`, 'error'); }
     }
     document.querySelector('#adapter-cancel').addEventListener('click', resetAdapterForm);
+    document.querySelector('#connection-close').addEventListener('click', closeConnectionForm);
+    document.querySelector('#connection-auth').addEventListener('change', toggleCredentialField);
+    document.querySelector('#http-configuration-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!configuringAdapterId) return;
+      const form = new FormData(event.currentTarget);
+      const payload = {endpoint:form.get('endpoint'),auth_method:form.get('auth_method'),timeout_seconds:Number(form.get('timeout_seconds')),retries:Number(form.get('retries'))};
+      if (payload.auth_method === 'bearer_env') payload.bearer_token_env = form.get('bearer_token_env');
+      try {
+        await api(`/api/v1/adapters/${encodeURIComponent(configuringAdapterId)}/http-configuration`, {method:'PUT', body:JSON.stringify(payload)});
+        connectionFeedback('连接配置已保存，可继续执行连接测试。', 'success');
+        await loadAdapters();
+      } catch (error) { connectionFeedback(`配置失败：${error.message}`, 'error'); }
+    });
+    document.querySelector('#connection-test').addEventListener('click', async () => {
+      if (!configuringAdapterId) return;
+      try {
+        connectionFeedback('正在调用目标服务……');
+        const result = await api('/api/v1/adapters/test', {method:'POST', body:JSON.stringify({adapter_id:configuringAdapterId,question:document.querySelector('#connection-question').value})});
+        connectionFeedback(`连接成功：回答 ${result.answer_present ? '已返回' : '为空'}，引用 ${result.citation_count}，召回 ${result.retrieval_count}。`, 'success');
+      } catch (error) { connectionFeedback(`连接失败：${error.message}`, 'error'); }
+    });
     document.querySelector('#adapter-form').addEventListener('submit', async event => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);

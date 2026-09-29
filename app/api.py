@@ -74,6 +74,16 @@ class UpdateAdapterRequest(BaseModel):
     enabled: bool | None = None
 
 
+class ConfigureHttpAdapterRequest(BaseModel):
+    """保存通用 HTTP Adapter 的非敏感连接参数。"""
+
+    endpoint: str = Field(min_length=1, max_length=2048)
+    auth_method: str = Field(default="none", pattern=r"^(none|bearer_env)$")
+    bearer_token_env: str | None = Field(default=None, max_length=128)
+    timeout_seconds: float = Field(default=15, gt=0, le=300)
+    retries: int = Field(default=1, ge=0, le=5)
+
+
 class ChangeRunStatusRequest(BaseModel):
     """请求合法的评测状态转换。"""
     status: EvalRunStatus
@@ -159,6 +169,25 @@ def create_router(
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
         return {"status": "deleted", "adapter": deleted}
+
+    @router.put("/adapters/{adapter_id}/http-configuration")
+    def configure_http_adapter(
+        adapter_id: str, request: ConfigureHttpAdapterRequest
+    ) -> dict[str, object]:
+        """校验并保存 HTTP 连接参数，不接收或回显 Token 明文。"""
+        try:
+            return adapters.configure_http(
+                adapter_id,
+                endpoint=request.endpoint,
+                timeout_seconds=request.timeout_seconds,
+                retries=request.retries,
+                auth_method=request.auth_method,
+                bearer_token_env=request.bearer_token_env,
+            )
+        except AdapterNotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
 
     @router.post("/adapters/test")
     def test_adapter_connection(request: TestAdapterRequest) -> dict[str, Any]:

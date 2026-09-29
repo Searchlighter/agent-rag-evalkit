@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from .adapter_contract import MockRagAdapter, TargetAgentAdapter
-from .domain import AdapterConfig, AdapterType, now
+from .domain import AdapterConfig, AdapterType, AdapterVersion, new_id, now
+from .http_adapter import HttpTargetAgentAdapter
 
 
 class AdapterNotFoundError(LookupError):
@@ -22,6 +23,7 @@ class AdapterRegistry:
     def __init__(self, adapters: Mapping[str, TargetAgentAdapter] | None = None) -> None:
         self._adapters: dict[str, TargetAgentAdapter] = {}
         self._configs: dict[str, AdapterConfig] = {}
+        self._versions: dict[str, list[AdapterVersion]] = {}
         self._system_ids: set[str] = set()
         for adapter_id, adapter in (adapters or {}).items():
             self.register(adapter_id, adapter)
@@ -74,6 +76,57 @@ class AdapterRegistry:
         config.updated_at = now()
         return self._public_config(config)
 
+    def configure_http(
+        self,
+        adapter_id: str,
+        *,
+        endpoint: str,
+        timeout_seconds: float,
+        retries: int,
+        auth_method: str,
+        bearer_token_env: str | None = None,
+    ) -> dict[str, object]:
+        """校验 HTTP 连接参数，创建不可变版本并绑定运行时 Adapter。"""
+        config = self._get_config(adapter_id)
+        if config.adapter_type is not AdapterType.HTTP:
+            raise ValueError("仅 HTTP 类型 Adapter 支持通用 HTTP 连接配置")
+        normalized_auth = auth_method.strip().lower()
+        if normalized_auth not in {"none", "bearer_env"}:
+            raise ValueError("auth_method 必须是 none 或 bearer_env")
+        normalized_env = bearer_token_env.strip() if bearer_token_env else None
+        if normalized_auth == "bearer_env" and not normalized_env:
+            raise ValueError("Bearer 环境变量名称不能为空")
+        if normalized_auth == "none":
+            normalized_env = None
+
+        adapter = HttpTargetAgentAdapter(
+            endpoint=endpoint,
+            timeout_seconds=timeout_seconds,
+            retries=retries,
+            bearer_token_env=normalized_env,
+        )
+        versions = self._versions.setdefault(config.id, [])
+        version = AdapterVersion(
+            id=new_id("adapter_version"),
+            adapter_config_id=config.id,
+            version_number=len(versions) + 1,
+            adapter_type=AdapterType.HTTP,
+            settings={
+                "endpoint": adapter.endpoint,
+                "timeout_seconds": adapter.timeout_seconds,
+                "retries": adapter.retries,
+                "auth_method": normalized_auth,
+            },
+            secret_refs=(
+                {"bearer_token": normalized_env} if normalized_env is not None else {}
+            ),
+        )
+        versions.append(version)
+        self._adapters[config.id] = adapter
+        config.current_version_id = version.id
+        config.updated_at = now()
+        return self._public_config(config)
+
     def delete_config(self, adapter_id: str) -> dict[str, object]:
         """删除逻辑配置及同 ID 的运行时 Adapter。"""
         config = self._get_config(adapter_id)
@@ -82,6 +135,7 @@ class AdapterRegistry:
         public = self._public_config(config)
         del self._configs[config.id]
         self._adapters.pop(config.id, None)
+        self._versions.pop(config.id, None)
         return public
 
     def list_configs(self) -> list[dict[str, object]]:
@@ -111,7 +165,7 @@ class AdapterRegistry:
             raise AdapterNotFoundError(f"Adapter 配置不存在: {normalized_id}") from error
 
     def _public_config(self, config: AdapterConfig) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "id": config.id,
             "name": config.name,
             "adapter_type": config.adapter_type.value,
@@ -122,6 +176,17 @@ class AdapterRegistry:
             "created_at": config.created_at.isoformat(),
             "updated_at": config.updated_at.isoformat(),
         }
+        versions = self._versions.get(config.id, [])
+        if versions:
+            version = versions[-1]
+            result["connection"] = {
+                **dict(version.settings),
+                "bearer_token_env": version.secret_refs.get("bearer_token"),
+                "version_number": version.version_number,
+            }
+        else:
+            result["connection"] = None
+        return result
 
 
 def create_default_registry() -> AdapterRegistry:

@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from fastapi import HTTPException
 
 from app.adapter_contract import AdapterResponse, RetrievedChunk
 from app.adapter_registry import AdapterDisabledError, AdapterNotFoundError, AdapterRegistry
 from app.api import (
+    ConfigureHttpAdapterRequest,
     CreateAdapterRequest,
     TestAdapterRequest,
     UpdateAdapterRequest,
     create_router,
 )
 from app.domain import AdapterConfig, AdapterType, AdapterVersion
+from app.http_adapter import HttpTargetAgentAdapter
 from app.repository import InMemoryRepository
 from app.service import EvalKitService
 
@@ -253,6 +256,71 @@ class AdapterRegistryTests(unittest.TestCase):
                 )
             )
         self.assertEqual(409, duplicate.exception.status_code)
+
+    def test_http_adapter_configuration_creates_version_and_supports_probe(self) -> None:
+        registry = AdapterRegistry()
+        registry.create_config("team-rag", "团队知识库", AdapterType.HTTP)
+        router = create_router(EvalKitService(InMemoryRepository()), registry)
+
+        configure = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/adapters/{adapter_id}/http-configuration"
+        )
+        probe = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/adapters/test"
+        )
+
+        configured = configure(
+            "team-rag",
+            ConfigureHttpAdapterRequest(
+                endpoint=" https://example.test/query ",
+                auth_method="none",
+                timeout_seconds=8,
+                retries=2,
+            ),
+        )
+
+        self.assertTrue(configured["configured"])
+        self.assertEqual(1, configured["connection"]["version_number"])
+        self.assertEqual(
+            "https://example.test/query", configured["connection"]["endpoint"]
+        )
+        self.assertIsInstance(registry.resolve("team-rag"), HttpTargetAgentAdapter)
+
+        response = AdapterResponse(
+            request_id="replaced-by-probe",
+            answer="available",
+            citations=[],
+            retrievals=[],
+        )
+        with patch.object(HttpTargetAgentAdapter, "invoke", return_value=response):
+            result = probe(TestAdapterRequest(adapter_id="team-rag", question="ping"))
+        self.assertEqual("ok", result["status"])
+        self.assertTrue(result["answer_present"])
+
+    def test_http_adapter_configuration_uses_environment_reference_without_token(self) -> None:
+        registry = AdapterRegistry()
+        registry.create_config("secure-rag", "安全知识库", AdapterType.HTTP)
+
+        with patch.dict(
+            "app.http_adapter.environ", {"TEAM_RAG_TOKEN": "runtime-secret"}
+        ):
+            configured = registry.configure_http(
+                "secure-rag",
+                endpoint="https://example.test/query",
+                timeout_seconds=15,
+                retries=1,
+                auth_method="bearer_env",
+                bearer_token_env="TEAM_RAG_TOKEN",
+            )
+
+        self.assertEqual(
+            "TEAM_RAG_TOKEN", configured["connection"]["bearer_token_env"]
+        )
+        self.assertNotIn("runtime-secret", str(configured))
 
     def test_execute_api_rejects_run_bound_to_unknown_adapter(self) -> None:
         service = EvalKitService(InMemoryRepository())
