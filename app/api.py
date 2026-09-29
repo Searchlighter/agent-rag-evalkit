@@ -333,6 +333,11 @@ def create_router(
         except (ValueError, KeyError) as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
 
+    @router.get("/eval-runs")
+    def list_eval_runs() -> list[dict[str, Any]]:
+        """列出当前进程内的全部评测运行及其汇总指标。"""
+        return service.list_eval_runs()
+
     @router.post("/eval-runs/{run_id}/status")
     def update_status(run_id: str, request: ChangeRunStatusRequest) -> dict[str, Any]:
         """更新评测运行状态。"""

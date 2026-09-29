@@ -40,11 +40,12 @@
     .run-group-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
     .run-group-head h3 { margin:0; font-size:15px; }
     .run-list { display:grid; gap:10px; }
-    .run-card { padding:16px 18px; display:grid; grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(90px,.55fr)); gap:14px; align-items:center; }
+    .run-card { padding:16px 18px; display:grid; grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(90px,.55fr)) auto; gap:14px; align-items:center; }
     .run-card-title { font-weight:750; margin-bottom:3px; }
     .run-card-meta { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
     .run-stat span { display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.05em; }
     .run-stat strong { display:block; margin-top:3px; }
+    .run-actions { display:flex; justify-content:flex-end; }
     .source-badge { display:inline-block; margin-right:7px; padding:2px 7px; border-radius:5px; font-size:10px; font-weight:800; }
     .source-badge.user { color:#94f0cf; background:#11352c; }
     .source-badge.demo { color:#ffd29f; background:#3a2819; }
@@ -216,7 +217,7 @@
       <article class="panel dataset-preview" id="dataset-preview" hidden></article>
     </section>
     <section class="page" data-page="runs" hidden>
-      <div class="page-title"><div><h2>评测运行</h2><div class="subtitle">创建任务并跟踪真实评测状态</div></div></div>
+      <div class="page-title"><div><h2>评测运行</h2><div class="subtitle">创建任务并跟踪真实评测状态</div></div><button class="btn" id="refresh-runs" type="button">刷新运行列表</button></div>
       <form class="panel form-panel" id="eval-run-form">
         <div class="run-create-grid">
           <div class="field"><label for="run-dataset-version">数据集版本</label><select id="run-dataset-version" name="dataset_version_id" required><option value="">正在加载数据集……</option></select></div>
@@ -262,7 +263,39 @@
     function runCard(item, source) {
       const isDemo = source === 'demo', label = isDemo ? 'DEMO' : 'USER';
       const title = isDemo ? '内置 Mock 演示' : item.dataset_name;
-      return `<article class="panel run-card"><div><div class="run-card-title"><span class="source-badge ${source}">${label}</span>${esc(title)}</div><div class="run-card-meta">${esc(item.run_id)} · ${esc(item.adapter_id)}${item.model_id ? ` · ${esc(item.model_id)}` : ''}</div></div><div class="run-stat"><span>状态</span><strong>${esc(item.status)}</strong></div><div class="run-stat"><span>进度</span><strong>${item.completed_case_count}/${item.dataset_case_count}</strong></div><div class="run-stat"><span>Recall@K</span><strong>${pct(item.metrics.recall_at_k)}</strong></div></article>`;
+      const action = !isDemo && item.status === 'queued' ? `<button class="btn primary" data-run-action="execute" data-run-id="${esc(item.run_id)}">执行评测</button>` : `<span class="subtitle">${item.status === 'running' ? '执行中' : '只读'}</span>`;
+      return `<article class="panel run-card"><div><div class="run-card-title"><span class="source-badge ${source}">${label}</span>${esc(title)}</div><div class="run-card-meta">${esc(item.run_id)} · v${item.dataset_version_number || 1} · ${esc(item.adapter_id)}${item.model_id ? ` · ${esc(item.model_id)}` : ''}</div></div><div class="run-stat"><span>状态</span><strong>${esc(item.status)}</strong></div><div class="run-stat"><span>进度 / 失败</span><strong>${item.completed_case_count}/${item.dataset_case_count} · ${item.failed_case_count}</strong></div><div class="run-stat"><span>Recall / MRR</span><strong>${pct(item.metrics.recall_at_k)} / ${pct(item.metrics.mrr)}</strong></div><div class="run-actions">${action}</div></article>`;
+    }
+    function renderRuns(items) {
+      const userRuns = items.filter(item => item.source === 'user');
+      const demoRuns = items.filter(item => item.source === 'demo');
+      document.querySelector('#user-run-count').textContent = `${userRuns.length} Runs`;
+      const userList = document.querySelector('#user-runs');
+      userList.innerHTML = userRuns.length ? userRuns.map(item => runCard(item, 'user')).join('') : '<article class="panel empty-state"><div><div class="empty-state-icon">▷</div><h3>暂无用户创建的评测运行</h3><p>使用上方表单选择数据集版本与 Adapter 创建任务。用户运行不会与下方 Mock 演示混合统计。</p></div></article>';
+      document.querySelector('#demo-run').innerHTML = demoRuns.length ? demoRuns.map(item => runCard(item, 'demo')).join('') : '<article class="panel empty-state"><div><p>内置演示运行不可用。</p></div></article>';
+      userList.querySelectorAll('[data-run-action="execute"]').forEach(button => button.addEventListener('click', () => executeRun(button.dataset.runId, button)));
+    }
+    async function loadRuns(showFeedback=false) {
+      const refresh = document.querySelector('#refresh-runs');
+      refresh.disabled = true;
+      try {
+        renderRuns(await api('/api/v1/eval-runs'));
+        if (showFeedback) runFeedback('运行列表已刷新。', 'success');
+      } catch (error) {
+        document.querySelector('#user-runs').innerHTML = `<article class="panel empty-state"><div><div class="empty-state-icon">!</div><h3>运行列表加载失败</h3><p>${esc(error.message)}</p></div></article>`;
+        if (showFeedback) runFeedback(`刷新失败：${error.message}`, 'error');
+      } finally { refresh.disabled = false; }
+    }
+    async function executeRun(runId, button) {
+      button.disabled = true;
+      button.textContent = '执行中……';
+      runFeedback(`正在执行任务 ${runId}，请等待当前批次完成……`);
+      try {
+        const result = await api(`/api/v1/eval-runs/${encodeURIComponent(runId)}/execute`, {method:'POST'});
+        runFeedback(`任务 ${runId} 执行完成：${result.completed_case_count}/${result.dataset_case_count} Cases。`, 'success');
+      } catch (error) {
+        runFeedback(`任务执行失败：${error.message}`, 'error');
+      } finally { await loadRuns(); }
     }
     let adapterItems = [], datasetItems = [], editingAdapterId = null, configuringAdapterId = null;
     async function api(url, options={}) {
@@ -526,13 +559,14 @@
         const config = await api('/api/v1/configs', {method:'POST', body:JSON.stringify({name:`Web 评测 · ${new Date().toLocaleString()}`,retrieval_k:Number(form.get('retrieval_k'))})});
         const run = await api('/api/v1/eval-runs', {method:'POST', body:JSON.stringify({dataset_version_id:form.get('dataset_version_id'),config_id:config.id,adapter_id:form.get('adapter_id'),model_id:form.get('model_id') || ''})});
         runFeedback(`任务 ${run.id} 已创建，当前状态为 ${run.status}。`, 'success');
-        await load();
+        await loadRuns();
       } catch (error) {
         runFeedback(`创建失败：${error.message}`, 'error');
       } finally {
         refreshRunOptions();
       }
     });
+    document.querySelector('#refresh-runs').addEventListener('click', () => loadRuns(true));
     function showDetail(item) {
       document.querySelectorAll('tbody tr').forEach(row => row.classList.toggle('active', row.dataset.id === item.case_id));
       document.querySelector('#detail').innerHTML = `<div class="panel-head"><h2>Case 诊断</h2><span class="pill">${esc(item.case_id)}</span></div><h3>${esc(item.question)}</h3><div class="detail-row"><span class="detail-label">模型回答</span><div class="code">${esc(item.answer)}</div></div><div class="detail-row"><span class="detail-label">召回证据</span><div class="code">${esc(item.retrieval_ids.join(', ') || '无召回')}</div></div><div class="detail-row"><span class="detail-label">诊断结论</span><strong class="${item.metrics.recall_at_k === 0 ? 'fail' : 'pass'}">${esc(item.diagnosis.suggested_category)}</strong><div class="subtitle">${esc(item.diagnosis.suggestion)}</div></div>`;
@@ -557,9 +591,6 @@
         tbody.querySelectorAll('tr').forEach((row,index) => row.addEventListener('click',()=>showDetail(data.results[index])));
         document.querySelector('#badcase-count').textContent = `${data.badcases.length} Open`;
         document.querySelector('#badcases').innerHTML = data.badcases.length ? data.badcases.map(item=>`<div class="badcase"><div class="badcase-top"><span>${esc(item.category)}</span><span class="severity">${esc(item.severity)}</span></div><div class="subtitle">${esc(item.case_id)} · ${esc(item.note)}</div></div>`).join('') : '<div class="empty">当前没有 Badcase</div>';
-        document.querySelector('#user-run-count').textContent = `${data.user_runs.length} Runs`;
-        document.querySelector('#user-runs').innerHTML = data.user_runs.length ? data.user_runs.map(item=>runCard(item,'user')).join('') : '<article class="panel empty-state"><div><div class="empty-state-icon">▷</div><h3>暂无用户创建的评测运行</h3><p>使用上方表单选择数据集版本与 Adapter 创建任务。用户运行不会与下方 Mock 演示混合统计。</p></div></article>';
-        document.querySelector('#demo-run').innerHTML = runCard(data.demo.summary,'demo');
         if (data.results.length) showDetail(data.results.find(x=>x.metrics.recall_at_k===0) || data.results[0]);
       } catch (error) {
         document.querySelector('#run-status').textContent = '● 数据加载失败';
@@ -570,6 +601,7 @@
     load();
     loadAdapters();
     loadDatasets();
+    loadRuns();
   </script>
 </body>
 </html>

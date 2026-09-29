@@ -346,6 +346,16 @@ class AdapterRegistryTests(unittest.TestCase):
             for route in router.routes
             if route.path == "/api/v1/eval-runs" and "POST" in route.methods
         )
+        list_runs = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/eval-runs" and "GET" in route.methods
+        )
+        execute_run = next(
+            route.endpoint
+            for route in router.routes
+            if route.path == "/api/v1/eval-runs/{run_id}/execute"
+        )
 
         run = create_run(
             CreateEvalRunRequest(
@@ -361,6 +371,22 @@ class AdapterRegistryTests(unittest.TestCase):
             "https://example.test/query", run["adapter_snapshot"]["endpoint"]
         )
         self.assertEqual("queued", run["status"].value)
+
+        queued = list_runs()[0]
+        self.assertEqual("页面任务", queued["dataset_name"])
+        self.assertEqual("user", queued["source"])
+        self.assertEqual("queued", queued["status"])
+        response = AdapterResponse(
+            request_id="runtime-request",
+            answer="测试回答",
+            citations=[],
+            retrievals=[],
+        )
+        with patch.object(HttpTargetAgentAdapter, "invoke", return_value=response):
+            executed = execute_run(run["id"])
+        self.assertEqual("succeeded", executed["status"])
+        self.assertEqual(1, executed["completed_case_count"])
+        self.assertEqual("succeeded", list_runs()[0]["status"])
 
         registry.update_config("team-rag", enabled=False)
         with self.assertRaises(HTTPException) as context:

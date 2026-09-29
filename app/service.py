@@ -749,6 +749,33 @@ class EvalKitService:
             "note": "指标与规则校验均为确定性计算；语义正确性可通过人工评分补充。",
         }
 
+    def list_eval_runs(self) -> list[dict[str, Any]]:
+        """按创建时间倒序返回运行状态、数据上下文和汇总指标。"""
+        items: list[dict[str, Any]] = []
+        for run in sorted(
+            self.repository.eval_runs.values(),
+            key=lambda item: item.created_at,
+            reverse=True,
+        ):
+            summary = self.get_run_summary(run.id)
+            version = self.repository.dataset_versions[run.dataset_version_id]
+            dataset = self.repository.datasets[version.dataset_id]
+            config = self.repository.configs[run.config_id]
+            items.append({
+                **summary,
+                "dataset_id": dataset.id,
+                "dataset_name": dataset.name,
+                "dataset_version_number": version.version_number,
+                "config_name": config.name,
+                "retrieval_k": config.retrieval_k,
+                "source": (
+                    "demo" if dataset.owner_id == "dashboard-demo" else "user"
+                ),
+                "created_at": run.created_at.isoformat(),
+                "updated_at": run.updated_at.isoformat(),
+            })
+        return items
+
     def list_audit_events(self) -> list[AuditEvent]:
         """返回当前仓储中的审计事件快照。"""
         return list(self.repository.audit_events)
